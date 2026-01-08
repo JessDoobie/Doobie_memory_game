@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Play • {{ code }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="wrap wide">
+    <div class="topbar">
+      <div class="title">
+        <div class="pill">Lobby: <b id="code">{{ code }}</b></div>
+        <div class="muted tiny" id="status">Loading…</div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Score</div><div class="v" id="score">0</div></div>
+        <div class="stat"><div class="k">Matches</div><div class="v" id="matches">0</div></div>
+        <div class="stat"><div class="k">Misses</div><div class="v" id="misses">0</div></div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="board card">
+        <div class="boardHead">
+          <div class="muted tiny" id="you">You: —</div>
+          <div class="muted tiny" id="mode">Mode: —</div>
+        </div>
+        <div id="grid" class="grid"></div>
+        <div class="tiny muted" id="hint"></div>
+      </div>
+
+      <div class="side card">
+        <h3>Leaderboard</h3>
+        <div id="teamsBox" style="display:none"></div>
+        <div id="lb"></div>
+
+        <div class="hr"></div>
+        <p class="tiny muted">
+          Tip: rotate your phone — landscape fits bigger boards better.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.MM_CODE = "{{ code }}";
+  </script>
+  <script src="/static/game.js"></script>
+</body>
+</html>
