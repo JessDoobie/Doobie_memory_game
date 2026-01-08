@@ -1,21 +1,23 @@
 function $(id){ return document.getElementById(id); }
 
+// Provided by play.html
 const code = window.MM_CODE;
 const playerKey = "mm_player_id_" + code;
 let playerId = localStorage.getItem(playerKey);
 
 if(!playerId){
-  // If they went directly to /play without joining, send them to join
   window.location.href = "/join";
 }
 
 let lockInput = false;
-// --- FX state (to detect match/miss changes) ---
+
+/* ------------------------------
+   FX STATE + AUDIO
+--------------------------------*/
 let prevMatches = null;
 let prevMisses = null;
 let prevMatchedSet = new Set();
 
-// --- Tiny built-in sounds (no audio files needed) ---
 let audioCtx = null;
 
 function ensureAudio(){
@@ -23,7 +25,6 @@ function ensureAudio(){
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if(Ctx) audioCtx = new Ctx();
   }
-  // Some browsers start paused until a user gesture happens
   if(audioCtx && audioCtx.state === "suspended"){
     audioCtx.resume().catch(()=>{});
   }
@@ -36,7 +37,6 @@ function beep(type){
   const t0 = audioCtx.currentTime;
   const o = audioCtx.createOscillator();
   const g = audioCtx.createGain();
-
   o.connect(g);
   g.connect(audioCtx.destination);
 
@@ -50,7 +50,6 @@ function beep(type){
     o.start(t0);
     o.stop(t0 + 0.16);
   } else {
-    // miss
     o.type = "sine";
     o.frequency.setValueAtTime(220, t0);
     o.frequency.exponentialRampToValueAtTime(160, t0 + 0.10);
@@ -66,28 +65,33 @@ function shakeGrid(){
   const grid = $("grid");
   if(!grid) return;
   grid.classList.remove("grid-shake");
-  // force reflow so animation restarts
   void grid.offsetWidth;
   grid.classList.add("grid-shake");
   setTimeout(()=>grid.classList.remove("grid-shake"), 260);
 }
 
+/* ------------------------------
+   HELPERS
+--------------------------------*/
 function escapeHtml(s){
-  return (s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+  return (s||"")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;");
 }
 
 function computeColumns(size){
-  // Size is 4 or 6
   const isLandscape = window.matchMedia("(orientation: landscape)").matches;
   const wide = window.innerWidth >= 700;
-
   if(size === 4) return 4;
-
-  // size === 6
   if(isLandscape || wide) return 6;
-  return 4; // portrait phones: bigger tap targets, more rows
+  return 4;
 }
 
+/* ------------------------------
+   RENDER GRID
+--------------------------------*/
 function renderGrid(state){
   const lobby = state.lobby;
   const size = lobby.size;
@@ -98,20 +102,17 @@ function renderGrid(state){
   const grid = $("grid");
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
 
-  // Determine tile height based on screen
-  // Keep tap targets large on mobile; shrink a bit on small portrait 6x6
   let h = 78;
   if(size === 6 && cols === 4 && window.innerHeight < 760) h = 64;
   if(window.innerWidth < 380) h = Math.max(58, h - 8);
 
   grid.innerHTML = "";
 
- faces.forEach((face, idx) => {
-  const tile = document.createElement("button");
-  tile.className = "tile";
-  tile.dataset.idx = String(idx); 
-  tile.style.height = h + "px";
-
+  faces.forEach((face, idx) => {
+    const tile = document.createElement("button");
+    tile.className = "tile";
+    tile.dataset.idx = String(idx);
+    tile.style.height = h + "px";
 
     if(matched.has(idx)){
       tile.classList.add("matched");
@@ -127,40 +128,91 @@ function renderGrid(state){
 
     tile.onclick = async () => {
       if(lockInput) return;
-      // only allow flips when running
       if(lobby.status !== "running") return;
-      if(face) return; // already revealed currently
+      if(face) return;
+
       lockInput = true;
+      ensureAudio();
       await flip(idx);
-      // tiny cooldown prevents spam double taps
       setTimeout(() => { lockInput = false; }, 180);
     };
 
     grid.appendChild(tile);
   });
 
-  // Update header stats
-  $("status").textContent = `Status: ${lobby.status} • Players: ${lobby.player_count}/10 • Board: ${size}x${size}`;
+  $("status").textContent =
+    `Status: ${lobby.status} • Players: ${lobby.player_count}/10 • Board: ${size}x${size}`;
   $("score").textContent = state.player.score;
   $("matches").textContent = state.player.matches;
   $("misses").textContent = state.player.misses;
-  $("you").textContent = `You: ${state.player.name}${state.player.team ? " ("+state.player.team+")" : ""}`;
-  $("mode").textContent = `Mode: ${lobby.mode === "teams" ? "Teams" : "Solo"}`;
+  $("you").textContent =
+    `You: ${state.player.name}${state.player.team ? " ("+state.player.team+")" : ""}`;
+  $("mode").textContent =
+    `Mode: ${lobby.mode === "teams" ? "Teams" : "Solo"}`;
 
   if(lobby.status === "waiting"){
     $("hint").textContent = "Waiting for host to start…";
   } else if(lobby.status === "ended"){
-    $("hint").textContent = state.player.finished ? "Round ended — nice!" : "Round ended.";
+    $("hint").textContent =
+      state.player.finished ? "Round ended — nice!" : "Round ended.";
   } else {
-    $("hint").textContent = state.player.finished ? "✅ Finished! Watch the leaderboard." : "Find matches: +10 match, -1 miss.";
+    $("hint").textContent =
+      state.player.finished
+        ? "✅ Finished! Watch the leaderboard."
+        : "Find matches: +10 match, -1 miss.";
   }
+
+  /* ---- MATCH / MISS FX ---- */
+  const curMatches = state.player.matches;
+  const curMisses = state.player.misses;
+  const currentMatched = new Set(state.grid.matched || []);
+
+  const newlyMatched = [];
+  currentMatched.forEach(i => {
+    if(!prevMatchedSet.has(i)) newlyMatched.push(i);
+  });
+
+  if(newlyMatched.length){
+    beep("match");
+    newlyMatched.forEach(i => {
+      const btn = grid.querySelector(`.tile[data-idx="${i}"]`);
+      if(btn){
+        btn.classList.add("match-pop");
+        setTimeout(()=>btn.classList.remove("match-pop"), 260);
+      }
+    });
+  }
+
+  if(prevMisses !== null && curMisses > prevMisses){
+    beep("miss");
+    shakeGrid();
+  }
+
+  prevMatches = curMatches;
+  prevMisses = curMisses;
+  prevMatchedSet = currentMatched;
 }
 
+/* ------------------------------
+   LEADERBOARD
+--------------------------------*/
 function renderLeaderboard(lb, mode){
   const p = (lb.players || []);
-  let html = `<table class="tbl"><tr><th>#</th><th>Name</th><th>Team</th><th>Score</th><th>Matches</th><th>Misses</th></tr>`;
+  let html =
+    `<table class="tbl">
+      <tr><th>#</th><th>Name</th><th>Team</th>
+          <th>Score</th><th>Matches</th><th>Misses</th></tr>`;
+
   p.slice(0, 10).forEach((r, i) => {
-    html += `<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.team||"")}</td><td>${r.score}</td><td>${r.matches}</td><td>${r.misses}</td></tr>`;
+    html +=
+      `<tr>
+        <td>${i+1}</td>
+        <td>${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(r.team||"")}</td>
+        <td>${r.score}</td>
+        <td>${r.matches}</td>
+        <td>${r.misses}</td>
+      </tr>`;
   });
   html += `</table>`;
   $("lb").innerHTML = html;
@@ -168,9 +220,17 @@ function renderLeaderboard(lb, mode){
   if(mode === "teams" && (lb.teams||[]).length){
     $("teamsBox").style.display = "block";
     let th = `<div class="card inner"><h4>Teams (best 3 combined)</h4>`;
-    th += `<table class="tbl"><tr><th>#</th><th>Team</th><th>Score</th><th>Top 3</th></tr>`;
+    th +=
+      `<table class="tbl">
+        <tr><th>#</th><th>Team</th><th>Score</th><th>Top 3</th></tr>`;
     lb.teams.forEach((t, i) => {
-      th += `<tr><td>${i+1}</td><td>${escapeHtml(t.team)}</td><td>${t.score}</td><td>${escapeHtml((t.members||[]).join(", "))}</td></tr>`;
+      th +=
+        `<tr>
+          <td>${i+1}</td>
+          <td>${escapeHtml(t.team)}</td>
+          <td>${t.score}</td>
+          <td>${escapeHtml((t.members||[]).join(", "))}</td>
+        </tr>`;
     });
     th += `</table></div>`;
     $("teamsBox").innerHTML = th;
@@ -180,12 +240,13 @@ function renderLeaderboard(lb, mode){
   }
 }
 
+/* ------------------------------
+   SERVER POLLING
+--------------------------------*/
 async function getState(){
   try {
     const res = await fetch(`/api/state/${code}/${playerId}`);
-
-    if (!res.ok) throw new Error("server not ready");
-
+    if(!res.ok) throw new Error();
     const out = await res.json();
 
     if(!out.ok){
@@ -194,18 +255,15 @@ async function getState(){
       return;
     }
 
-    // Hide warmup once server responds
     const warm = document.getElementById("warmup");
     if(warm) warm.style.display = "none";
 
     renderGrid(out.state);
     renderLeaderboard(out.leaderboard, out.state.lobby.mode);
-  } catch (e) {
-    // Keep warmup visible while server wakes up
+  } catch(e){
+    // keep warmup visible while waking
   }
 }
-
-
 
 async function flip(idx){
   const res = await fetch("/api/flip", {
@@ -216,11 +274,11 @@ async function flip(idx){
   const out = await res.json();
   if(out.ok && out.state){
     renderGrid(out.state);
+    setTimeout(getState, 80);
   }
 }
 
 window.addEventListener("resize", () => {
-  // re-render quickly on orientation change
   getState();
 });
 
