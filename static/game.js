@@ -120,7 +120,11 @@ function renderLeaderboard(lb, mode){
 async function getState(){
   try {
     const res = await fetch(`/api/state/${code}/${playerId}`);
+
+    if (!res.ok) throw new Error("server not ready");
+
     const out = await res.json();
+
     if(!out.ok){
       localStorage.removeItem(playerKey);
       window.location.href = "/join";
@@ -137,6 +141,7 @@ async function getState(){
     // Keep warmup visible while server wakes up
   }
 }
+
 
 
 async function flip(idx){
