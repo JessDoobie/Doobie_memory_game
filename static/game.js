@@ -118,17 +118,26 @@ function renderLeaderboard(lb, mode){
 }
 
 async function getState(){
-  const res = await fetch(`/api/state/${code}/${playerId}`);
-  const out = await res.json();
-  if(!out.ok){
-    // If player not found, go back to join
-    localStorage.removeItem(playerKey);
-    window.location.href = "/join";
-    return;
+  try {
+    const res = await fetch(`/api/state/${code}/${playerId}`);
+    const out = await res.json();
+    if(!out.ok){
+      localStorage.removeItem(playerKey);
+      window.location.href = "/join";
+      return;
+    }
+
+    // Hide warmup once server responds
+    const warm = document.getElementById("warmup");
+    if(warm) warm.style.display = "none";
+
+    renderGrid(out.state);
+    renderLeaderboard(out.leaderboard, out.state.lobby.mode);
+  } catch (e) {
+    // Keep warmup visible while server wakes up
   }
-  renderGrid(out.state);
-  renderLeaderboard(out.leaderboard, out.state.lobby.mode);
 }
+
 
 async function flip(idx){
   const res = await fetch("/api/flip", {
