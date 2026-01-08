@@ -9,7 +9,7 @@
 <body>
   <div class="wrap">
     <h1>🎛️ Host Dashboard</h1>
-    <p class="muted">Create a lobby, share the code, start the round when ready.</p>
+    <p class="muted">Create a lobby, share the join code with your chat.</p>
 
     <div class="card">
       <div class="row">
@@ -60,20 +60,50 @@
     </div>
 
     <p class="tiny muted">
-      Render tip: set environment variable <b>HOST_KEY</b> to something private.
+      Host access is private. Bookmark your secret host link.
     </p>
   </div>
 
 <script>
-let lobbyCode = null;
+/* ------------------------------
+   Auto-fill host key from URL
+--------------------------------*/
+function getParam(name) {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(name);
+}
 
+const urlKey = getParam("host_key");
+if (urlKey) {
+  document.getElementById("hostKey").value = urlKey;
+}
+
+/* ------------------------------
+   Helper functions
+--------------------------------*/
 function el(id){ return document.getElementById(id); }
+
+function escapeHtml(s){
+  return (s||"")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;");
+}
 
 function lbHtml(data){
   const p = data.players || [];
-  let html = `<table class="tbl"><tr><th>#</th><th>Name</th><th>Team</th><th>Score</th><th>Matches</th><th>Misses</th></tr>`;
+  let html = `<table class="tbl">
+    <tr><th>#</th><th>Name</th><th>Team</th><th>Score</th><th>Matches</th><th>Misses</th></tr>`;
   p.forEach((r,i)=>{
-    html += `<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.team||"")}</td><td>${r.score}</td><td>${r.matches}</td><td>${r.misses}</td></tr>`;
+    html += `<tr>
+      <td>${i+1}</td>
+      <td>${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(r.team||"")}</td>
+      <td>${r.score}</td>
+      <td>${r.matches}</td>
+      <td>${r.misses}</td>
+    </tr>`;
   });
   html += `</table>`;
   return html;
@@ -83,27 +113,34 @@ function teamsHtml(data){
   const t = data.teams || [];
   if(!t.length) return "";
   let html = `<div class="card inner"><h4>Teams (best 3 combined)</h4>`;
-  html += `<table class="tbl"><tr><th>#</th><th>Team</th><th>Score</th><th>Top 3</th></tr>`;
+  html += `<table class="tbl">
+    <tr><th>#</th><th>Team</th><th>Score</th><th>Top 3</th></tr>`;
   t.forEach((r,i)=>{
-    html += `<tr><td>${i+1}</td><td>${escapeHtml(r.team)}</td><td>${r.score}</td><td>${escapeHtml((r.members||[]).join(", "))}</td></tr>`;
+    html += `<tr>
+      <td>${i+1}</td>
+      <td>${escapeHtml(r.team)}</td>
+      <td>${r.score}</td>
+      <td>${escapeHtml((r.members||[]).join(", "))}</td>
+    </tr>`;
   });
   html += `</table></div>`;
   return html;
-}
-
-function escapeHtml(s){
-  return (s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
 }
 
 async function hostPost(path, body){
   const hostKey = el("hostKey").value.trim();
   const res = await fetch(path, {
     method:"POST",
-    headers: {"Content-Type":"application/json", "X-Host-Key": hostKey},
+    headers:{
+      "Content-Type":"application/json",
+      "X-Host-Key": hostKey
+    },
     body: JSON.stringify(body || {})
   });
   return res.json();
 }
+
+let lobbyCode = null;
 
 async function refreshLobby(){
   if(!lobbyCode) return;
@@ -124,45 +161,44 @@ async function refreshLobby(){
   }
 }
 
+/* ------------------------------
+   Button handlers
+--------------------------------*/
 el("createBtn").onclick = async ()=>{
   const mode = el("mode").value;
   const size = parseInt(el("size").value, 10);
 
   const out = await hostPost("/api/host/create_lobby", {mode, size});
   if(!out.ok){
-    alert(out.error || "Failed");
+    alert(out.error || "Failed to create lobby");
     return;
   }
+
   lobbyCode = out.lobby.code;
   el("lobbyCard").style.display = "block";
   el("code").textContent = lobbyCode;
-
-  const joinUrl = `${location.origin}/join`;
-  el("joinLink").textContent = joinUrl;
-
+  el("joinLink").textContent = `${location.origin}/join`;
   el("watchBtn").href = `${location.origin}/play/${lobbyCode}`;
-  await refreshLobby();
+
+  refreshLobby();
 };
 
 el("startBtn").onclick = async ()=>{
   if(!lobbyCode) return;
-  const out = await hostPost(`/api/host/start_round/${lobbyCode}`, {});
-  if(!out.ok) alert(out.error || "Failed to start");
-  await refreshLobby();
+  await hostPost(`/api/host/start_round/${lobbyCode}`);
+  refreshLobby();
 };
 
 el("endBtn").onclick = async ()=>{
   if(!lobbyCode) return;
-  const out = await hostPost(`/api/host/end_round/${lobbyCode}`, {});
-  if(!out.ok) alert(out.error || "Failed to end");
-  await refreshLobby();
+  await hostPost(`/api/host/end_round/${lobbyCode}`);
+  refreshLobby();
 };
 
 el("resetBtn").onclick = async ()=>{
   if(!lobbyCode) return;
-  const out = await hostPost(`/api/host/reset_lobby/${lobbyCode}`, {});
-  if(!out.ok) alert(out.error || "Failed to reset");
-  await refreshLobby();
+  await hostPost(`/api/host/reset_lobby/${lobbyCode}`);
+  refreshLobby();
 };
 
 setInterval(refreshLobby, 1000);
