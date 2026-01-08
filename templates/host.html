@@ -49,17 +49,24 @@
       <h2>Lobby</h2>
       <div class="pill">Code: <span id="code"></span></div>
 
-      <div class="muted tiny" style="margin-top:8px;">
-        Join link: <span id="joinLink"></span><br/>
-        Player view: <span id="playLink"></span><br/>
+      <div class="muted tiny" style="margin-top:8px; line-height:1.5;">
+        Join link: <span id="joinLink"></span>
+        <button class="btn outline" id="copyJoinBtn" style="margin-left:8px;">Copy</button>
+        <br/>
+
+        Player view: <span id="playLink"></span>
+        <button class="btn outline" id="copyPlayBtn" style="margin-left:8px;">Copy</button>
+        <br/>
+
         Spectator link: <span id="watchLink"></span>
+        <button class="btn outline" id="copyWatchBtn" style="margin-left:8px;">Copy</button>
       </div>
 
       <div class="grid2" style="margin-top:10px;">
         <button class="btn" id="startBtn">Start Round</button>
         <button class="btn outline" id="endBtn">End Round</button>
         <button class="btn outline" id="resetBtn">Next Round (new board)</button>
-        <a class="btn outline" id="watchBtn" href="#" target="_blank">Open Player View</a>
+        <a class="btn outline" id="openPlayBtn" href="#" target="_blank">Open Player View</a>
       </div>
 
       <div class="hr"></div>
@@ -88,6 +95,12 @@
       </div>
       <button class="btn outline" id="savePrizesBtn">Save Prizes</button>
       <p class="tiny muted" id="prizeSaved" style="margin-top:8px;"></p>
+
+      <!-- WINNERS (only when ended) -->
+      <div id="winnersCard" class="card inner" style="display:none; margin-top:14px;">
+        <h3 style="margin-top:0;">🏆 Winners</h3>
+        <div id="winnersBox" class="tiny"></div>
+      </div>
 
       <!-- TICKETS -->
       <div id="ticketTools" style="display:none">
@@ -138,6 +151,15 @@ function escapeHtml(s){
     .replaceAll("<","&lt;")
     .replaceAll(">","&gt;")
     .replaceAll('"',"&quot;");
+}
+
+async function copyText(txt){
+  try{
+    await navigator.clipboard.writeText(txt);
+    alert("Copied!");
+  }catch(e){
+    alert("Could not copy automatically. You can manually select + copy.");
+  }
 }
 
 async function hostPost(path, body){
@@ -198,7 +220,36 @@ function playersHtml(players){
   return html;
 }
 
+function renderWinners(lobby, lb){
+  const prizes = lobby.prizes || {};
+  const hasPrizes = !!(prizes["1"] || prizes["2"] || prizes["3"]);
+  const ended = lobby.status === "ended";
+
+  if(!ended || !hasPrizes){
+    el("winnersCard").style.display = "none";
+    el("winnersBox").innerHTML = "";
+    return;
+  }
+
+  const parts = [];
+  if(lobby.mode === "teams"){
+    const t = (lb.teams || []);
+    if(prizes["1"]) parts.push(`<div><b>1st</b> (${escapeHtml(prizes["1"])}): ${t[0] ? escapeHtml(t[0].team) : "—"}</div>`);
+    if(prizes["2"]) parts.push(`<div><b>2nd</b> (${escapeHtml(prizes["2"])}): ${t[1] ? escapeHtml(t[1].team) : "—"}</div>`);
+    if(prizes["3"]) parts.push(`<div><b>3rd</b> (${escapeHtml(prizes["3"])}): ${t[2] ? escapeHtml(t[2].team) : "—"}</div>`);
+  } else {
+    const p = (lb.players || []);
+    if(prizes["1"]) parts.push(`<div><b>1st</b> (${escapeHtml(prizes["1"])}): ${p[0] ? escapeHtml(p[0].name) : "—"}</div>`);
+    if(prizes["2"]) parts.push(`<div><b>2nd</b> (${escapeHtml(prizes["2"])}): ${p[1] ? escapeHtml(p[1].name) : "—"}</div>`);
+    if(prizes["3"]) parts.push(`<div><b>3rd</b> (${escapeHtml(prizes["3"])}): ${p[2] ? escapeHtml(p[2].name) : "—"}</div>`);
+  }
+
+  el("winnersBox").innerHTML = parts.join("");
+  el("winnersCard").style.display = "block";
+}
+
 let lobbyCode = null;
+let cachedLinks = { join:"", play:"", watch:"" };
 
 async function refreshLobby(){
   if(!lobbyCode) return;
@@ -228,6 +279,8 @@ async function refreshLobby(){
     el("teamsBox").style.display = "none";
     el("teamsBox").innerHTML = "";
   }
+
+  renderWinners(lobby, data.leaderboard);
 
   // ticket tools only if ticket lobby
   el("ticketTools").style.display = (lobby.entry_mode === "ticket") ? "block" : "none";
@@ -262,16 +315,24 @@ el("createBtn").onclick = async ()=>{
   const playUrl = `${location.origin}/play/${lobbyCode}`;
   const watchUrl = `${location.origin}/watch/${lobbyCode}`;
 
+  cachedLinks.join = joinUrl;
+  cachedLinks.play = playUrl;
+  cachedLinks.watch = watchUrl;
+
   el("joinLink").textContent = joinUrl;
   el("playLink").textContent = playUrl;
   el("watchLink").textContent = watchUrl;
-  el("watchBtn").href = playUrl;
+  el("openPlayBtn").href = playUrl;
 
   el("ticketList").value = "";
   el("prizeSaved").textContent = "";
 
   refreshLobby();
 };
+
+el("copyJoinBtn").onclick = () => copyText(cachedLinks.join);
+el("copyPlayBtn").onclick = () => copyText(cachedLinks.play);
+el("copyWatchBtn").onclick = () => copyText(cachedLinks.watch);
 
 el("startBtn").onclick = async ()=>{
   if(!lobbyCode) return;
