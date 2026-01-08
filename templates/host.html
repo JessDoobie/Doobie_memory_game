@@ -20,7 +20,7 @@
       <div class="row">
         <label>Mode</label>
         <select id="mode">
-          <option value="solo">Solo</option>
+          <option value="solo" selected>Solo</option>
           <option value="teams">Teams</option>
         </select>
       </div>
@@ -41,10 +41,10 @@
         </select>
       </div>
 
-      <button class="btn" id="createBtn">Create Lobby</button>
-      <p class="tiny muted" style="margin-top:10px;">
-        Bookmark your secret host link so your key auto-fills.
-      </p>
+      <button class="btn" id="createBtn" type="button">Create Lobby</button>
+      <p class="tiny muted" style="margin-top:10px;">Bookmark your secret host link so your key auto-fills.</p>
+
+      <p id="errBox" class="tiny" style="margin-top:10px; display:none;"></p>
     </div>
 
     <div class="card" id="lobbyCard" style="display:none">
@@ -53,99 +53,138 @@
 
       <div class="muted tiny" style="margin-top:8px; line-height:1.5;">
         Join link: <span id="joinLink"></span>
-        <button class="btn outline" id="copyJoinBtn">Copy</button><br/>
+        <button class="btn outline" id="copyJoinBtn" type="button">Copy</button><br/>
 
         Player view: <span id="playLink"></span>
-        <button class="btn outline" id="copyPlayBtn">Copy</button><br/>
+        <button class="btn outline" id="copyPlayBtn" type="button">Copy</button><br/>
 
         Spectator link: <span id="watchLink"></span>
-        <button class="btn outline" id="copyWatchBtn">Copy</button>
+        <button class="btn outline" id="copyWatchBtn" type="button">Copy</button>
       </div>
 
+      <div class="hr"></div>
+      <h3>Chat Blurb</h3>
+      <textarea id="chatBlurb"
+        style="width:100%;min-height:110px;border-radius:12px;padding:10px;background:rgba(11,15,25,.55);color:#e8ebf3;border:1px solid rgba(39,50,74,1);"
+        readonly></textarea>
       <div class="grid2" style="margin-top:10px;">
-        <button class="btn" id="startBtn">Start Round</button>
-        <button class="btn outline" id="endBtn">End Round</button>
-        <button class="btn outline" id="resetBtn">Next Round</button>
-        <a class="btn outline" id="openPlayBtn" href="#" target="_blank">Open Player View</a>
+        <button class="btn outline" id="copyChatBtn" type="button">📋 Copy Chat Blurb</button>
+        <button class="btn outline" id="toggleChatBtn" type="button">Make it shorter</button>
       </div>
-
-      <div class="hr"></div>
-
-      <div class="row">
-        <div><b>Status:</b> <span id="status"></span></div>
-        <div><b>Players:</b> <span id="playersCount"></span> / 10</div>
-      </div>
-
-      <!-- PRIZES -->
-      <div class="hr"></div>
-      <h3>Prizes</h3>
-      <div class="row"><label>1st</label><input id="p1"></div>
-      <div class="row"><label>2nd</label><input id="p2"></div>
-      <div class="row"><label>3rd</label><input id="p3"></div>
-      <button class="btn outline" id="savePrizesBtn">Save Prizes</button>
-
-      <!-- WINNERS -->
-      <div id="winnersCard" class="card inner" style="display:none;margin-top:14px;">
-        <h3 style="margin-top:0;">🏆 Winners</h3>
-        <div id="winnersBox" class="tiny"></div>
-        <button class="btn outline" id="copyWinnersBtn" style="margin-top:10px;">
-          📋 Copy Winners
-        </button>
-      </div>
-
-      <!-- PLAYERS -->
-      <div class="hr"></div>
-      <h3>Players</h3>
-      <div id="playersBox"></div>
-
-      <!-- LEADERBOARD -->
-      <div class="hr"></div>
-      <h3>Leaderboard</h3>
-      <div id="teamsBox" style="display:none"></div>
-      <div id="lb"></div>
     </div>
   </div>
 
 <script>
 function el(id){ return document.getElementById(id); }
-function esc(s){ return (s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;"); }
+function getParam(name){ return new URLSearchParams(window.location.search).get(name); }
+
+const urlKey = getParam("host_key");
+if(urlKey) el("hostKey").value = urlKey;
+
+function showErr(msg){
+  const box = el("errBox");
+  box.style.display = "block";
+  box.style.color = "#ffb4b4";
+  box.textContent = msg;
+}
 
 async function copyText(txt){
-  try{ await navigator.clipboard.writeText(txt); alert("Copied!"); }
-  catch{ alert("Copy failed"); }
+  try { await navigator.clipboard.writeText(txt); alert("Copied!"); }
+  catch { alert("Copy failed — you can manually highlight + copy."); }
+}
+
+async function hostPost(path, body){
+  const hostKey = el("hostKey").value.trim();
+
+  const res = await fetch(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Host-Key": hostKey
+    },
+    body: JSON.stringify(body || {})
+  });
+
+  const text = await res.text();
+
+  // Try JSON first
+  let data = null;
+  try { data = JSON.parse(text); } catch(e) {}
+
+  if(!res.ok){
+    const msg = (data && (data.error || data.message)) || text.slice(0, 220) || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  // If it was JSON, return it, else return generic ok
+  return data || { ok: true };
 }
 
 let lobbyCode = null;
-let lastWinnersText = "";
+let cachedLinks = { join:"", play:"", watch:"" };
+let chatMode = "long";
 
-function renderWinners(lobby, lb){
-  const prizes = lobby.prizes || {};
-  if(lobby.status !== "ended"){ el("winnersCard").style.display="none"; return; }
+function buildChatBlurb(entryMode){
+  const code = lobbyCode || "";
+  const join = cachedLinks.join;
+  const watch = cachedLinks.watch;
 
-  let lines = [];
-  let html = "";
-
-  if(lobby.mode === "teams"){
-    const t = lb.teams || [];
-    if(prizes["1"] && t[0]){ lines.push(`1st (${prizes["1"]}): ${t[0].team}`); }
-    if(prizes["2"] && t[1]){ lines.push(`2nd (${prizes["2"]}): ${t[1].team}`); }
-    if(prizes["3"] && t[2]){ lines.push(`3rd (${prizes["3"]}): ${t[2].team}`); }
-  } else {
-    const p = lb.players || [];
-    if(prizes["1"] && p[0]){ lines.push(`1st (${prizes["1"]}): ${p[0].name}`); }
-    if(prizes["2"] && p[1]){ lines.push(`2nd (${prizes["2"]}): ${p[1].name}`); }
-    if(prizes["3"] && p[2]){ lines.push(`3rd (${prizes["3"]}): ${p[2].name}`); }
+  if(chatMode === "short"){
+    return `🃏 Memory Match!\nCODE: ${code}\nJoin: ${join}\n${entryMode === "ticket" ? "🎟️ Ticket required" : "✅ Free entry"}\nWatch: ${watch}`;
   }
 
-  html = lines.map(l => `<div>${esc(l)}</div>`).join("");
-  lastWinnersText = lines.join("\n");
-
-  el("winnersBox").innerHTML = html;
-  el("winnersCard").style.display = "block";
+  return `🃏 Memory Match is LIVE!\n` +
+         `Go to: ${join}\n` +
+         `Click Join a Game\n` +
+         `Enter CODE: ${code}\n` +
+         `${entryMode === "ticket" ? "🎟️ Ticket required\n" : "✅ Free entry\n"}` +
+         `👀 Spectate: ${watch}`;
 }
 
-el("copyWinnersBtn").onclick = () => {
-  if(lastWinnersText) copyText(lastWinnersText);
+el("createBtn").onclick = async () => {
+  el("errBox").style.display = "none";
+
+  try{
+    const mode = el("mode").value;
+    const size = parseInt(el("size").value, 10);
+    const entry_mode = el("entryMode").value;
+
+    // IMPORTANT: this must match your app.py route
+    const out = await hostPost("/api/host/create_lobby", {mode, size, entry_mode});
+
+    if(!out.ok){
+      throw new Error(out.error || "Create lobby failed");
+    }
+
+    lobbyCode = out.lobby.code;
+    el("lobbyCard").style.display = "block";
+    el("code").textContent = lobbyCode;
+
+    cachedLinks.join  = `${location.origin}/join`;
+    cachedLinks.play  = `${location.origin}/play/${lobbyCode}`;
+    cachedLinks.watch = `${location.origin}/watch/${lobbyCode}`;
+
+    el("joinLink").textContent = cachedLinks.join;
+    el("playLink").textContent = cachedLinks.play;
+    el("watchLink").textContent = cachedLinks.watch;
+
+    el("chatBlurb").value = buildChatBlurb(entry_mode);
+
+    el("copyJoinBtn").onclick = () => copyText(cachedLinks.join);
+    el("copyPlayBtn").onclick = () => copyText(cachedLinks.play);
+    el("copyWatchBtn").onclick = () => copyText(cachedLinks.watch);
+    el("copyChatBtn").onclick  = () => copyText(el("chatBlurb").value.trim());
+
+    el("toggleChatBtn").onclick = () => {
+      chatMode = (chatMode === "long") ? "short" : "long";
+      el("toggleChatBtn").textContent = (chatMode === "long") ? "Make it shorter" : "Make it longer";
+      el("chatBlurb").value = buildChatBlurb(entry_mode);
+    };
+
+  }catch(err){
+    showErr("Create Lobby failed: " + err.message);
+    alert("Create Lobby failed:\n" + err.message);
+  }
 };
 </script>
 </body>
