@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Join • Memory Match</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <h1>✅ Join a Game</h1>
+
+    <div class="card">
+      <div class="row">
+        <label>Lobby Code</label>
+        <input id="code" placeholder="ABC123" autocomplete="off" />
+      </div>
+
+      <div class="row">
+        <label>Name</label>
+        <input id="name" placeholder="Jessica" autocomplete="off" />
+      </div>
+
+      <div class="row">
+        <label>Team (only if Teams mode)</label>
+        <input id="team" placeholder="Team A" autocomplete="off" />
+      </div>
+
+      <button class="btn" id="joinBtn">Join</button>
+      <p class="tiny muted" id="msg"></p>
+    </div>
+
+    <p class="tiny muted">After joining, you’ll be sent to the game screen.</p>
+  </div>
+
+<script>
+function el(id){ return document.getElementById(id); }
+
+el("joinBtn").onclick = async ()=>{
+  el("msg").textContent = "";
+  const code = el("code").value.trim().toUpperCase();
+  const name = el("name").value.trim();
+  const team = el("team").value.trim();
+
+  const res = await fetch("/api/join", {
+    method:"POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({code, name, team})
+  });
+  const out = await res.json();
+
+  if(!out.ok){
+    el("msg").textContent = out.error || "Could not join.";
+    return;
+  }
+
+  localStorage.setItem("mm_player_id_"+code, out.player_id);
+  window.location.href = out.play_url;
+};
+</script>
+</body>
+</html>
