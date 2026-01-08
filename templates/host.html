@@ -42,7 +42,9 @@
       </div>
 
       <button class="btn" id="createBtn">Create Lobby</button>
-      <p class="tiny muted" style="margin-top:10px;">Bookmark your secret host link so your key auto-fills.</p>
+      <p class="tiny muted" style="margin-top:10px;">
+        Bookmark your secret host link so your key auto-fills.
+      </p>
     </div>
 
     <div class="card" id="lobbyCard" style="display:none">
@@ -51,21 +53,19 @@
 
       <div class="muted tiny" style="margin-top:8px; line-height:1.5;">
         Join link: <span id="joinLink"></span>
-        <button class="btn outline" id="copyJoinBtn" style="margin-left:8px;">Copy</button>
-        <br/>
+        <button class="btn outline" id="copyJoinBtn">Copy</button><br/>
 
         Player view: <span id="playLink"></span>
-        <button class="btn outline" id="copyPlayBtn" style="margin-left:8px;">Copy</button>
-        <br/>
+        <button class="btn outline" id="copyPlayBtn">Copy</button><br/>
 
         Spectator link: <span id="watchLink"></span>
-        <button class="btn outline" id="copyWatchBtn" style="margin-left:8px;">Copy</button>
+        <button class="btn outline" id="copyWatchBtn">Copy</button>
       </div>
 
       <div class="grid2" style="margin-top:10px;">
         <button class="btn" id="startBtn">Start Round</button>
         <button class="btn outline" id="endBtn">End Round</button>
-        <button class="btn outline" id="resetBtn">Next Round (new board)</button>
+        <button class="btn outline" id="resetBtn">Next Round</button>
         <a class="btn outline" id="openPlayBtn" href="#" target="_blank">Open Player View</a>
       </div>
 
@@ -76,52 +76,24 @@
         <div><b>Players:</b> <span id="playersCount"></span> / 10</div>
       </div>
 
-      <div class="row">
-        <div><b>Mode:</b> <span id="modeLabel"></span></div>
-        <div><b>Entry:</b> <span id="entryLabel"></span></div>
-      </div>
-
       <!-- PRIZES -->
       <div class="hr"></div>
       <h3>Prizes</h3>
-      <div class="row">
-        <label>1st</label><input id="p1" placeholder="e.g. $25 or Nail set" />
-      </div>
-      <div class="row">
-        <label>2nd</label><input id="p2" placeholder="e.g. $10" />
-      </div>
-      <div class="row">
-        <label>3rd</label><input id="p3" placeholder="e.g. $5" />
-      </div>
+      <div class="row"><label>1st</label><input id="p1"></div>
+      <div class="row"><label>2nd</label><input id="p2"></div>
+      <div class="row"><label>3rd</label><input id="p3"></div>
       <button class="btn outline" id="savePrizesBtn">Save Prizes</button>
-      <p class="tiny muted" id="prizeSaved" style="margin-top:8px;"></p>
 
-      <!-- WINNERS (only when ended) -->
-      <div id="winnersCard" class="card inner" style="display:none; margin-top:14px;">
+      <!-- WINNERS -->
+      <div id="winnersCard" class="card inner" style="display:none;margin-top:14px;">
         <h3 style="margin-top:0;">🏆 Winners</h3>
         <div id="winnersBox" class="tiny"></div>
+        <button class="btn outline" id="copyWinnersBtn" style="margin-top:10px;">
+          📋 Copy Winners
+        </button>
       </div>
 
-      <!-- TICKETS -->
-      <div id="ticketTools" style="display:none">
-        <div class="hr"></div>
-        <h3>Tickets</h3>
-
-        <div class="row">
-          <label>Generate</label>
-          <input id="ticketCount" value="10" />
-        </div>
-
-        <button class="btn outline" id="genTicketsBtn">Generate Tickets</button>
-        <p class="tiny muted" style="margin-top:10px;">Single-use. Copy & DM to paying players.</p>
-
-        <textarea id="ticketList" placeholder="Tickets will appear here..."
-          style="width:100%;min-height:130px;border-radius:12px;padding:10px;background:rgba(11,15,25,.55);color:#e8ebf3;border:1px solid rgba(39,50,74,1);"></textarea>
-
-        <button class="btn outline" id="copyTicketsBtn">Copy Tickets</button>
-      </div>
-
-      <!-- PLAYERS + KICK -->
+      <!-- PLAYERS -->
       <div class="hr"></div>
       <h3>Players</h3>
       <div id="playersBox"></div>
@@ -132,266 +104,49 @@
       <div id="teamsBox" style="display:none"></div>
       <div id="lb"></div>
     </div>
-
-    <p class="tiny muted">Public viewers should not see this page unless they have your secret host link.</p>
   </div>
 
 <script>
-function getParam(name) {
-  const params = new URLSearchParams(window.location.search);
-  return params.get(name);
-}
-const urlKey = getParam("host_key");
-if (urlKey) document.getElementById("hostKey").value = urlKey;
-
 function el(id){ return document.getElementById(id); }
-function escapeHtml(s){
-  return (s||"")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;");
-}
+function esc(s){ return (s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;"); }
 
 async function copyText(txt){
-  try{
-    await navigator.clipboard.writeText(txt);
-    alert("Copied!");
-  }catch(e){
-    alert("Could not copy automatically. You can manually select + copy.");
-  }
-}
-
-async function hostPost(path, body){
-  const hostKey = el("hostKey").value.trim();
-  const res = await fetch(path, {
-    method:"POST",
-    headers:{ "Content-Type":"application/json", "X-Host-Key": hostKey },
-    body: JSON.stringify(body || {})
-  });
-  return res.json();
-}
-
-function lbHtml(players){
-  let html = `<table class="tbl">
-    <tr><th>#</th><th>Name</th><th>Team</th><th>Score</th><th>Matches</th><th>Misses</th></tr>`;
-  (players||[]).slice(0,10).forEach((r,i)=>{
-    html += `<tr>
-      <td>${i+1}</td>
-      <td>${escapeHtml(r.name)}</td>
-      <td>${escapeHtml(r.team||"")}</td>
-      <td>${r.score}</td>
-      <td>${r.matches}</td>
-      <td>${r.misses}</td>
-    </tr>`;
-  });
-  html += `</table>`;
-  return html;
-}
-
-function teamsHtml(teams){
-  let html = `<div class="card inner"><h4>Teams (best 3 combined)</h4>`;
-  html += `<table class="tbl"><tr><th>#</th><th>Team</th><th>Score</th><th>Top 3</th></tr>`;
-  (teams||[]).forEach((t,i)=>{
-    html += `<tr>
-      <td>${i+1}</td>
-      <td>${escapeHtml(t.team)}</td>
-      <td>${t.score}</td>
-      <td>${escapeHtml((t.members||[]).join(", "))}</td>
-    </tr>`;
-  });
-  html += `</table></div>`;
-  return html;
-}
-
-function playersHtml(players){
-  if(!players || !players.length) return `<div class="tiny muted">No players yet.</div>`;
-  let html = `<table class="tbl">
-    <tr><th>Name</th><th>Team</th><th>Score</th><th></th></tr>`;
-  players.forEach(p=>{
-    html += `<tr>
-      <td>${escapeHtml(p.name)}</td>
-      <td>${escapeHtml(p.team||"")}</td>
-      <td>${p.score}</td>
-      <td><button class="btn outline kickBtn" data-pid="${p.player_id}">Kick</button></td>
-    </tr>`;
-  });
-  html += `</table>`;
-  return html;
-}
-
-function renderWinners(lobby, lb){
-  const prizes = lobby.prizes || {};
-  const hasPrizes = !!(prizes["1"] || prizes["2"] || prizes["3"]);
-  const ended = lobby.status === "ended";
-
-  if(!ended || !hasPrizes){
-    el("winnersCard").style.display = "none";
-    el("winnersBox").innerHTML = "";
-    return;
-  }
-
-  const parts = [];
-  if(lobby.mode === "teams"){
-    const t = (lb.teams || []);
-    if(prizes["1"]) parts.push(`<div><b>1st</b> (${escapeHtml(prizes["1"])}): ${t[0] ? escapeHtml(t[0].team) : "—"}</div>`);
-    if(prizes["2"]) parts.push(`<div><b>2nd</b> (${escapeHtml(prizes["2"])}): ${t[1] ? escapeHtml(t[1].team) : "—"}</div>`);
-    if(prizes["3"]) parts.push(`<div><b>3rd</b> (${escapeHtml(prizes["3"])}): ${t[2] ? escapeHtml(t[2].team) : "—"}</div>`);
-  } else {
-    const p = (lb.players || []);
-    if(prizes["1"]) parts.push(`<div><b>1st</b> (${escapeHtml(prizes["1"])}): ${p[0] ? escapeHtml(p[0].name) : "—"}</div>`);
-    if(prizes["2"]) parts.push(`<div><b>2nd</b> (${escapeHtml(prizes["2"])}): ${p[1] ? escapeHtml(p[1].name) : "—"}</div>`);
-    if(prizes["3"]) parts.push(`<div><b>3rd</b> (${escapeHtml(prizes["3"])}): ${p[2] ? escapeHtml(p[2].name) : "—"}</div>`);
-  }
-
-  el("winnersBox").innerHTML = parts.join("");
-  el("winnersCard").style.display = "block";
+  try{ await navigator.clipboard.writeText(txt); alert("Copied!"); }
+  catch{ alert("Copy failed"); }
 }
 
 let lobbyCode = null;
-let cachedLinks = { join:"", play:"", watch:"" };
+let lastWinnersText = "";
 
-async function refreshLobby(){
-  if(!lobbyCode) return;
-  const res = await fetch(`/api/lobby/${lobbyCode}`);
-  const data = await res.json();
-  if(!data.ok) return;
+function renderWinners(lobby, lb){
+  const prizes = lobby.prizes || {};
+  if(lobby.status !== "ended"){ el("winnersCard").style.display="none"; return; }
 
-  const lobby = data.lobby;
+  let lines = [];
+  let html = "";
 
-  el("status").textContent = lobby.status;
-  el("playersCount").textContent = lobby.player_count;
-  el("modeLabel").textContent = (lobby.mode === "teams") ? "Teams" : "Solo";
-  el("entryLabel").textContent = (lobby.entry_mode === "ticket") ? "Ticket Required" : "Free";
-
-  // prizes load into inputs
-  const pr = lobby.prizes || {};
-  el("p1").value = pr["1"] || "";
-  el("p2").value = pr["2"] || "";
-  el("p3").value = pr["3"] || "";
-
-  el("lb").innerHTML = lbHtml(data.leaderboard.players);
-
-  if(lobby.mode === "teams" && (data.leaderboard.teams||[]).length){
-    el("teamsBox").style.display = "block";
-    el("teamsBox").innerHTML = teamsHtml(data.leaderboard.teams);
+  if(lobby.mode === "teams"){
+    const t = lb.teams || [];
+    if(prizes["1"] && t[0]){ lines.push(`1st (${prizes["1"]}): ${t[0].team}`); }
+    if(prizes["2"] && t[1]){ lines.push(`2nd (${prizes["2"]}): ${t[1].team}`); }
+    if(prizes["3"] && t[2]){ lines.push(`3rd (${prizes["3"]}): ${t[2].team}`); }
   } else {
-    el("teamsBox").style.display = "none";
-    el("teamsBox").innerHTML = "";
+    const p = lb.players || [];
+    if(prizes["1"] && p[0]){ lines.push(`1st (${prizes["1"]}): ${p[0].name}`); }
+    if(prizes["2"] && p[1]){ lines.push(`2nd (${prizes["2"]}): ${p[1].name}`); }
+    if(prizes["3"] && p[2]){ lines.push(`3rd (${prizes["3"]}): ${p[2].name}`); }
   }
 
-  renderWinners(lobby, data.leaderboard);
+  html = lines.map(l => `<div>${esc(l)}</div>`).join("");
+  lastWinnersText = lines.join("\n");
 
-  // ticket tools only if ticket lobby
-  el("ticketTools").style.display = (lobby.entry_mode === "ticket") ? "block" : "none";
-
-  // players + kick
-  el("playersBox").innerHTML = playersHtml(data.leaderboard.players);
-  document.querySelectorAll(".kickBtn").forEach(btn=>{
-    btn.onclick = async ()=>{
-      const pid = btn.dataset.pid;
-      if(!pid) return;
-      if(!confirm("Kick this player?")) return;
-      const out = await hostPost(`/api/host/kick/${lobbyCode}`, {player_id: pid});
-      if(!out.ok) alert(out.error || "Kick failed");
-      refreshLobby();
-    };
-  });
+  el("winnersBox").innerHTML = html;
+  el("winnersCard").style.display = "block";
 }
 
-el("createBtn").onclick = async ()=>{
-  const mode = el("mode").value;
-  const size = parseInt(el("size").value, 10);
-  const entry_mode = el("entryMode").value;
-
-  const out = await hostPost("/api/host/create_lobby", {mode, size, entry_mode});
-  if(!out.ok){ alert(out.error || "Failed to create lobby"); return; }
-
-  lobbyCode = out.lobby.code;
-  el("lobbyCard").style.display = "block";
-  el("code").textContent = lobbyCode;
-
-  const joinUrl = `${location.origin}/join`;
-  const playUrl = `${location.origin}/play/${lobbyCode}`;
-  const watchUrl = `${location.origin}/watch/${lobbyCode}`;
-
-  cachedLinks.join = joinUrl;
-  cachedLinks.play = playUrl;
-  cachedLinks.watch = watchUrl;
-
-  el("joinLink").textContent = joinUrl;
-  el("playLink").textContent = playUrl;
-  el("watchLink").textContent = watchUrl;
-  el("openPlayBtn").href = playUrl;
-
-  el("ticketList").value = "";
-  el("prizeSaved").textContent = "";
-
-  refreshLobby();
+el("copyWinnersBtn").onclick = () => {
+  if(lastWinnersText) copyText(lastWinnersText);
 };
-
-el("copyJoinBtn").onclick = () => copyText(cachedLinks.join);
-el("copyPlayBtn").onclick = () => copyText(cachedLinks.play);
-el("copyWatchBtn").onclick = () => copyText(cachedLinks.watch);
-
-el("startBtn").onclick = async ()=>{
-  if(!lobbyCode) return;
-  const out = await hostPost(`/api/host/start_round/${lobbyCode}`, {});
-  if(!out.ok) alert(out.error || "Start failed");
-  refreshLobby();
-};
-
-el("endBtn").onclick = async ()=>{
-  if(!lobbyCode) return;
-  const out = await hostPost(`/api/host/end_round/${lobbyCode}`, {});
-  if(!out.ok) alert(out.error || "End failed");
-  refreshLobby();
-};
-
-el("resetBtn").onclick = async ()=>{
-  if(!lobbyCode) return;
-  const out = await hostPost(`/api/host/reset_lobby/${lobbyCode}`, {});
-  if(!out.ok) alert(out.error || "Reset failed");
-  refreshLobby();
-};
-
-el("savePrizesBtn").onclick = async ()=>{
-  if(!lobbyCode) return;
-  const p1 = el("p1").value.trim();
-  const p2 = el("p2").value.trim();
-  const p3 = el("p3").value.trim();
-  const out = await hostPost(`/api/host/set_prizes/${lobbyCode}`, {p1, p2, p3});
-  if(!out.ok){
-    el("prizeSaved").textContent = out.error || "Save failed";
-    return;
-  }
-  el("prizeSaved").textContent = "✅ Prizes saved.";
-  setTimeout(()=>{ el("prizeSaved").textContent = ""; }, 2000);
-  refreshLobby();
-};
-
-el("genTicketsBtn").onclick = async ()=>{
-  if(!lobbyCode) return;
-  const count = parseInt(el("ticketCount").value || "10", 10);
-  const out = await hostPost(`/api/host/generate_tickets/${lobbyCode}`, {count});
-  if(!out.ok){ alert(out.error || "Failed to generate tickets"); return; }
-  const existing = el("ticketList").value.trim();
-  const add = (out.tickets || []).join("\n");
-  el("ticketList").value = (existing ? existing + "\n" : "") + add;
-};
-
-el("copyTicketsBtn").onclick = async ()=>{
-  const text = el("ticketList").value.trim();
-  if(!text){ alert("No tickets yet."); return; }
-  try{
-    await navigator.clipboard.writeText(text);
-    alert("Tickets copied!");
-  }catch(e){
-    alert("Could not copy automatically. You can manually select + copy.");
-  }
-};
-
-setInterval(refreshLobby, 1000);
 </script>
 </body>
 </html>
