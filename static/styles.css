@@ -248,6 +248,14 @@ input, select{
   margin: 14px auto 10px;
   animation: spin 1s linear infinite;
 }
+.grid2{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 520px){
+  .grid2{ grid-template-columns: 1fr; }
+}
 
 @keyframes spin {
   to { transform: rotate(360deg); }
