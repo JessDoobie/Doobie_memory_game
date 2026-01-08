@@ -20,7 +20,7 @@ MAX_PLAYERS = 10
 PAIR_SCORE = 10
 MISS_PENALTY = 1
 
-# Simple host admin key (set this in Render env for real use)
+# Set these in Render Environment Variables
 HOST_KEY = os.environ.get("HOST_KEY", "letmein")
 
 
@@ -45,6 +45,14 @@ def make_code(n=6) -> str:
     return "".join(random.choice(alphabet) for _ in range(n))
 
 
+# -------- Tickets --------
+TICKET_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def make_ticket(n=10) -> str:
+    return "".join(random.choice(TICKET_ALPHABET) for _ in range(n))
+
+
 def generate_board(seed: int, size: int) -> List[str]:
     """
     Returns a flattened list of card faces (strings) of length size*size.
@@ -54,7 +62,6 @@ def generate_board(seed: int, size: int) -> List[str]:
     total = size * size
     assert total % 2 == 0, "Board size must be even number of cards"
 
-    # Use emoji faces (fast + mobile friendly)
     emoji_pool = [
         "🍒","🍋","🍉","🍇","🍓","🍑","🍍","🥝","🍏","🍎","🍊","🥥",
         "🧁","🍩","🍪","🍰","🍫","🍬","🍭","🍿","🧋","☕","🥨","🧀",
@@ -79,18 +86,15 @@ class PlayerState:
     team: str = ""
     joined_ms: int = field(default_factory=now_ms)
 
-    # gameplay
     score: int = 0
     matches: int = 0
     misses: int = 0
     flips: int = 0
     finished_ms: Optional[int] = None
 
-    # currently revealed (server-authoritative)
     first_idx: Optional[int] = None
     second_idx: Optional[int] = None
 
-    # per-round revealed and matched indices
     revealed: Dict[int, int] = field(default_factory=dict)  # idx -> reveal_until_ms
     matched: set = field(default_factory=set)
 
@@ -101,11 +105,11 @@ class PlayerState:
 @dataclass
 class Lobby:
     code: str
-    mode: str = "solo"  # solo | teams
-    size: int = 6       # 4 or 6 supported here
+    mode: str = "solo"        # solo | teams
+    size: int = 6             # 4 or 6
     created_ms: int = field(default_factory=now_ms)
 
-    status: str = "waiting"  # waiting | running | ended
+    status: str = "waiting"   # waiting | running | ended
     seed: int = field(default_factory=lambda: random.randint(1, 2_000_000_000))
     board: List[str] = field(default_factory=list)
 
@@ -114,8 +118,13 @@ class Lobby:
 
     players: Dict[str, PlayerState] = field(default_factory=dict)
 
-    # config
     allow_join: bool = True
+
+    # NEW: Entry mode per lobby
+    entry_mode: str = "free"  # free | ticket
+
+    # NEW: Single-use tickets for this lobby: ticket_code -> used?
+    tickets: Dict[str, bool] = field(default_factory=dict)
 
     def total_pairs(self) -> int:
         return (self.size * self.size) // 2
@@ -143,6 +152,8 @@ def lobby_public_state(lobby: Lobby):
         "ended_ms": lobby.ended_ms,
         "max_players": MAX_PLAYERS,
         "player_count": len(lobby.players),
+        "allow_join": lobby.allow_join,
+        "entry_mode": lobby.entry_mode,  # NEW
     }
 
 
@@ -168,7 +179,6 @@ def leaderboard(lobby: Lobby):
             "finish_time_ms": finish_time_ms,
         })
 
-    # Sort: score desc, finished first, then fastest finish time, then fewer misses
     def sort_key(r):
         finished_rank = 0 if r["finished"] else 1
         finish_time = r["finish_time_ms"] if r["finish_time_ms"] is not None else 10**12
@@ -176,7 +186,6 @@ def leaderboard(lobby: Lobby):
 
     rows.sort(key=sort_key)
 
-    # Team aggregation (best 3 combined)
     team_scores = {}
     if lobby.mode == "teams":
         by_team = {}
@@ -192,7 +201,6 @@ def leaderboard(lobby: Lobby):
                 "members": [m["name"] for m in top3],
             }
 
-        # sort teams
         team_scores = dict(sorted(team_scores.items(), key=lambda kv: -kv[1]["score"]))
 
     return {"players": rows, "teams": list(team_scores.values())}
@@ -202,11 +210,10 @@ def player_view_state(lobby: Lobby, player: PlayerState):
     lobby.ensure_board()
     total = lobby.size * lobby.size
 
-    # Update timed reveals: remove expired
+    # expire timed reveals
     t = now_ms()
     expired = [idx for idx, until in player.revealed.items() if until <= t]
     for idx in expired:
-        # Don't un-reveal matched cards
         if idx not in player.matched:
             player.revealed.pop(idx, None)
 
@@ -218,7 +225,6 @@ def player_view_state(lobby: Lobby, player: PlayerState):
         if 0 <= idx < total:
             visible[idx] = True
 
-    # Faces only for visible cards, otherwise None
     faces = [lobby.board[i] if visible[i] else None for i in range(total)]
 
     return {
@@ -234,7 +240,7 @@ def player_view_state(lobby: Lobby, player: PlayerState):
         },
         "lobby": lobby_public_state(lobby),
         "grid": {
-            "faces": faces,         # None for hidden cards
+            "faces": faces,
             "matched": sorted(list(player.matched)),
         }
     }
@@ -248,8 +254,13 @@ def home():
     return render_template("home.html")
 
 
+# SECRET host link protection:
+# /host without ?host_key=YOURKEY -> redirect home
 @app.route("/host")
 def host_page():
+    key = request.args.get("host_key")
+    if key != HOST_KEY:
+        return redirect(url_for("home"))
     return render_template("host.html")
 
 
@@ -267,29 +278,56 @@ def play_page(code):
 
 
 # -----------------------------
-# API
+# API (Host)
 # -----------------------------
 @app.route("/api/host/create_lobby", methods=["POST"])
 def api_create_lobby():
     require_host(request)
     data = request.get_json(force=True) or {}
+
     mode = (data.get("mode") or "solo").strip().lower()
     size = int(data.get("size") or 6)
+    entry_mode = (data.get("entry_mode") or "free").strip().lower()  # NEW
+
     if mode not in ("solo", "teams"):
         mode = "solo"
     if size not in (4, 6):
         size = 6
+    if entry_mode not in ("free", "ticket"):
+        entry_mode = "free"
 
-    # generate unique code
     code = make_code()
     while code in LOBBIES:
         code = make_code()
 
-    lobby = Lobby(code=code, mode=mode, size=size)
+    lobby = Lobby(code=code, mode=mode, size=size, entry_mode=entry_mode)
     lobby.ensure_board()
     LOBBIES[code] = lobby
 
     return jsonify({"ok": True, "lobby": lobby_public_state(lobby)})
+
+
+@app.route("/api/host/generate_tickets/<code>", methods=["POST"])
+def api_generate_tickets(code):
+    require_host(request)
+    code = code.strip().upper()
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify({"ok": False, "error": "Lobby not found"}), 404
+
+    data = request.get_json(force=True) or {}
+    count = int(data.get("count") or 10)
+    count = max(1, min(100, count))  # safety cap
+
+    new_codes = []
+    for _ in range(count):
+        t = make_ticket(10)
+        while t in lobby.tickets:
+            t = make_ticket(10)
+        lobby.tickets[t] = False  # unused
+        new_codes.append(t)
+
+    return jsonify({"ok": True, "tickets": new_codes, "total": len(lobby.tickets)})
 
 
 @app.route("/api/host/start_round/<code>", methods=["POST"])
@@ -309,7 +347,6 @@ def api_start_round(code):
     lobby.allow_join = False
     lobby.ensure_board()
 
-    # Reset all players stats for a fresh round on the same board seed
     for p in lobby.players.values():
         p.score = 0
         p.matches = 0
@@ -345,7 +382,6 @@ def api_reset_lobby(code):
     if not lobby:
         return jsonify({"ok": False, "error": "Lobby not found"}), 404
 
-    # new seed = new board next round (still same for everyone)
     lobby.status = "waiting"
     lobby.allow_join = True
     lobby.seed = random.randint(1, 2_000_000_000)
@@ -353,7 +389,6 @@ def api_reset_lobby(code):
     lobby.started_ms = None
     lobby.ended_ms = None
 
-    # keep players in lobby but reset stats
     for p in lobby.players.values():
         p.score = 0
         p.matches = 0
@@ -368,6 +403,9 @@ def api_reset_lobby(code):
     return jsonify({"ok": True, "lobby": lobby_public_state(lobby)})
 
 
+# -----------------------------
+# API (Public)
+# -----------------------------
 @app.route("/api/lobby/<code>", methods=["GET"])
 def api_get_lobby(code):
     code = code.strip().upper()
@@ -383,20 +421,41 @@ def api_join():
     code = (data.get("code") or "").strip().upper()
     name = clean_name(data.get("name") or "")
     team = clean_team(data.get("team") or "")
+    ticket = (data.get("ticket") or "").strip().upper()  # NEW
 
     lobby = LOBBIES.get(code)
     if not lobby:
         return jsonify({"ok": False, "error": "Lobby not found"}), 404
+
     if not lobby.allow_join or lobby.status != "waiting":
         return jsonify({"ok": False, "error": "Lobby already started"}), 400
+
     if len(lobby.players) >= MAX_PLAYERS:
+        lobby.allow_join = False  # auto-lock if full
         return jsonify({"ok": False, "error": "Lobby is full (10 max)"}), 400
 
     if lobby.mode != "teams":
         team = ""
 
+    # Ticket enforcement (only if lobby requires it)
+    if lobby.entry_mode == "ticket":
+        if not ticket:
+            return jsonify({"ok": False, "error": "Ticket code required"}), 400
+        if ticket not in lobby.tickets:
+            return jsonify({"ok": False, "error": "Invalid ticket code"}), 400
+        if lobby.tickets[ticket] is True:
+            return jsonify({"ok": False, "error": "Ticket already used"}), 400
+
+        # Mark ticket as used
+        lobby.tickets[ticket] = True
+
     player_id = "pl_" + uuid.uuid4().hex[:10]
     lobby.players[player_id] = PlayerState(player_id=player_id, name=name, team=team)
+
+    # Auto-lock when it reaches 10 players
+    if len(lobby.players) >= MAX_PLAYERS:
+        lobby.allow_join = False
+
     return jsonify({"ok": True, "player_id": player_id, "play_url": url_for("play_page", code=code)})
 
 
@@ -438,64 +497,49 @@ def api_flip():
         return jsonify({"ok": False, "error": "Bad index"}), 400
 
     if idx in player.matched:
-        return jsonify({"ok": True, "state": player_view_state(lobby, player)})  # ignore
+        return jsonify({"ok": True, "state": player_view_state(lobby, player)})
 
-    # prevent flipping if two cards already up and not yet resolved
-    # (We resolve immediately server-side, but keep this safety)
     if player.first_idx is not None and player.second_idx is not None:
         return jsonify({"ok": True, "state": player_view_state(lobby, player)})
 
-    # If card is currently revealed (but not matched), ignore
     if idx in player.revealed and idx not in player.matched:
         return jsonify({"ok": True, "state": player_view_state(lobby, player)})
 
-    # flip
     player.flips += 1
 
-    # Reveal it for a short window
-    reveal_ms = now_ms() + 900  # brief reveal for misses
-    player.revealed[idx] = reveal_ms
+    player.revealed[idx] = now_ms() + 900
 
     if player.first_idx is None:
         player.first_idx = idx
         return jsonify({"ok": True, "state": player_view_state(lobby, player)})
 
-    # second flip
     player.second_idx = idx
     a = player.first_idx
     b = player.second_idx
 
-    # Resolve match
     if lobby.board[a] == lobby.board[b] and a != b:
         player.matched.add(a)
         player.matched.add(b)
         player.matches += 1
         player.score += PAIR_SCORE
 
-        # Keep matched cards revealed forever (remove timers)
         player.revealed.pop(a, None)
         player.revealed.pop(b, None)
-
     else:
         player.misses += 1
         player.score -= MISS_PENALTY
-
-        # keep both revealed slightly longer so player can see
         player.revealed[a] = now_ms() + 800
         player.revealed[b] = now_ms() + 800
 
-    # reset selection
     player.first_idx = None
     player.second_idx = None
 
-    # Check finish
     if player.is_finished(lobby.total_pairs()) and player.finished_ms is None:
         player.finished_ms = now_ms()
 
     return jsonify({"ok": True, "state": player_view_state(lobby, player)})
 
 
-# Simple health check
 @app.route("/health")
 def health():
     return "ok", 200
