@@ -11,8 +11,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-change-me")
 
 # -----------------------------
-# In-memory storage (simple demo)
-# NOTE: If Render restarts, lobbies reset. For persistence, you'd use Redis/DB.
+# In-memory storage
 # -----------------------------
 LOBBIES: Dict[str, "Lobby"] = {}
 
@@ -20,7 +19,6 @@ MAX_PLAYERS = 10
 PAIR_SCORE = 10
 MISS_PENALTY = 1
 
-# Set these in Render Environment Variables
 HOST_KEY = os.environ.get("HOST_KEY", "letmein")
 
 
@@ -54,10 +52,6 @@ def make_ticket(n=10) -> str:
 
 
 def generate_board(seed: int, size: int) -> List[str]:
-    """
-    Returns a flattened list of card faces (strings) of length size*size.
-    Faces are paired. Same seed => same board.
-    """
     rng = random.Random(seed)
     total = size * size
     assert total % 2 == 0, "Board size must be even number of cards"
@@ -120,11 +114,12 @@ class Lobby:
 
     allow_join: bool = True
 
-    # NEW: Entry mode per lobby
     entry_mode: str = "free"  # free | ticket
+    tickets: Dict[str, bool] = field(default_factory=dict)  # ticket_code -> used?
 
-    # NEW: Single-use tickets for this lobby: ticket_code -> used?
-    tickets: Dict[str, bool] = field(default_factory=dict)
+    # NEW: prizes by rank (simple)
+    # Example: {"1": "$25", "2": "$10", "3": "Nail set"}
+    prizes: Dict[str, str] = field(default_factory=dict)
 
     def total_pairs(self) -> int:
         return (self.size * self.size) // 2
@@ -153,7 +148,8 @@ def lobby_public_state(lobby: Lobby):
         "max_players": MAX_PLAYERS,
         "player_count": len(lobby.players),
         "allow_join": lobby.allow_join,
-        "entry_mode": lobby.entry_mode,  # NEW
+        "entry_mode": lobby.entry_mode,
+        "prizes": lobby.prizes,  # NEW
     }
 
 
@@ -186,31 +182,30 @@ def leaderboard(lobby: Lobby):
 
     rows.sort(key=sort_key)
 
-    team_scores = {}
+    team_rows = []
     if lobby.mode == "teams":
-        by_team = {}
+        by_team: Dict[str, List[dict]] = {}
         for r in rows:
             t = (r["team"] or "Team").strip() or "Team"
             by_team.setdefault(t, []).append(r)
 
         for t, members in by_team.items():
             top3 = sorted(members, key=lambda r: (-r["score"], r["misses"], r["flips"]))[:3]
-            team_scores[t] = {
+            team_rows.append({
                 "team": t,
                 "score": sum(m["score"] for m in top3),
                 "members": [m["name"] for m in top3],
-            }
+            })
 
-        team_scores = dict(sorted(team_scores.items(), key=lambda kv: -kv[1]["score"]))
+        team_rows.sort(key=lambda r: -r["score"])
 
-    return {"players": rows, "teams": list(team_scores.values())}
+    return {"players": rows, "teams": team_rows}
 
 
 def player_view_state(lobby: Lobby, player: PlayerState):
     lobby.ensure_board()
     total = lobby.size * lobby.size
 
-    # expire timed reveals
     t = now_ms()
     expired = [idx for idx, until in player.revealed.items() if until <= t]
     for idx in expired:
@@ -254,8 +249,6 @@ def home():
     return render_template("home.html")
 
 
-# SECRET host link protection:
-# /host without ?host_key=YOURKEY -> redirect home
 @app.route("/host")
 def host_page():
     key = request.args.get("host_key")
@@ -277,6 +270,15 @@ def play_page(code):
     return render_template("play.html", code=code)
 
 
+# NEW: Spectator / view-only page
+@app.route("/watch/<code>")
+def watch_page(code):
+    code = code.strip().upper()
+    if code not in LOBBIES:
+        return redirect(url_for("home"))
+    return render_template("watch.html", code=code)
+
+
 # -----------------------------
 # API (Host)
 # -----------------------------
@@ -287,7 +289,7 @@ def api_create_lobby():
 
     mode = (data.get("mode") or "solo").strip().lower()
     size = int(data.get("size") or 6)
-    entry_mode = (data.get("entry_mode") or "free").strip().lower()  # NEW
+    entry_mode = (data.get("entry_mode") or "free").strip().lower()
 
     if mode not in ("solo", "teams"):
         mode = "solo"
@@ -317,17 +319,65 @@ def api_generate_tickets(code):
 
     data = request.get_json(force=True) or {}
     count = int(data.get("count") or 10)
-    count = max(1, min(100, count))  # safety cap
+    count = max(1, min(100, count))
 
     new_codes = []
     for _ in range(count):
         t = make_ticket(10)
         while t in lobby.tickets:
             t = make_ticket(10)
-        lobby.tickets[t] = False  # unused
+        lobby.tickets[t] = False
         new_codes.append(t)
 
     return jsonify({"ok": True, "tickets": new_codes, "total": len(lobby.tickets)})
+
+
+# NEW: Set prizes
+@app.route("/api/host/set_prizes/<code>", methods=["POST"])
+def api_set_prizes(code):
+    require_host(request)
+    code = code.strip().upper()
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify({"ok": False, "error": "Lobby not found"}), 404
+
+    data = request.get_json(force=True) or {}
+    p1 = (data.get("p1") or "").strip()
+    p2 = (data.get("p2") or "").strip()
+    p3 = (data.get("p3") or "").strip()
+
+    prizes = {}
+    if p1: prizes["1"] = p1[:60]
+    if p2: prizes["2"] = p2[:60]
+    if p3: prizes["3"] = p3[:60]
+
+    lobby.prizes = prizes
+    return jsonify({"ok": True, "prizes": lobby.prizes})
+
+
+# NEW: Kick player
+@app.route("/api/host/kick/<code>", methods=["POST"])
+def api_kick_player(code):
+    require_host(request)
+    code = code.strip().upper()
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify({"ok": False, "error": "Lobby not found"}), 404
+
+    data = request.get_json(force=True) or {}
+    pid = (data.get("player_id") or "").strip()
+
+    if not pid or pid not in lobby.players:
+        return jsonify({"ok": False, "error": "Player not found"}), 404
+
+    kicked_name = lobby.players[pid].name
+    del lobby.players[pid]
+
+    # If we were full, reopen joins (only if still waiting)
+    if lobby.status == "waiting" and len(lobby.players) < MAX_PLAYERS:
+        lobby.allow_join = True
+
+    return jsonify({"ok": True, "kicked": kicked_name, "player_count": len(lobby.players)})
 
 
 @app.route("/api/host/start_round/<code>", methods=["POST"])
@@ -421,7 +471,7 @@ def api_join():
     code = (data.get("code") or "").strip().upper()
     name = clean_name(data.get("name") or "")
     team = clean_team(data.get("team") or "")
-    ticket = (data.get("ticket") or "").strip().upper()  # NEW
+    ticket = (data.get("ticket") or "").strip().upper()
 
     lobby = LOBBIES.get(code)
     if not lobby:
@@ -431,13 +481,12 @@ def api_join():
         return jsonify({"ok": False, "error": "Lobby already started"}), 400
 
     if len(lobby.players) >= MAX_PLAYERS:
-        lobby.allow_join = False  # auto-lock if full
+        lobby.allow_join = False
         return jsonify({"ok": False, "error": "Lobby is full (10 max)"}), 400
 
     if lobby.mode != "teams":
         team = ""
 
-    # Ticket enforcement (only if lobby requires it)
     if lobby.entry_mode == "ticket":
         if not ticket:
             return jsonify({"ok": False, "error": "Ticket code required"}), 400
@@ -445,14 +494,11 @@ def api_join():
             return jsonify({"ok": False, "error": "Invalid ticket code"}), 400
         if lobby.tickets[ticket] is True:
             return jsonify({"ok": False, "error": "Ticket already used"}), 400
-
-        # Mark ticket as used
         lobby.tickets[ticket] = True
 
     player_id = "pl_" + uuid.uuid4().hex[:10]
     lobby.players[player_id] = PlayerState(player_id=player_id, name=name, team=team)
 
-    # Auto-lock when it reaches 10 players
     if len(lobby.players) >= MAX_PLAYERS:
         lobby.allow_join = False
 
@@ -506,7 +552,6 @@ def api_flip():
         return jsonify({"ok": True, "state": player_view_state(lobby, player)})
 
     player.flips += 1
-
     player.revealed[idx] = now_ms() + 900
 
     if player.first_idx is None:
