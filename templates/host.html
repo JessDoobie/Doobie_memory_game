@@ -33,18 +33,30 @@
         </select>
       </div>
 
+      <div class="row">
+        <label>Entry</label>
+        <select id="entryMode">
+          <option value="free" selected>Free</option>
+          <option value="ticket">Ticket Required</option>
+        </select>
+      </div>
+
       <button class="btn" id="createBtn">Create Lobby</button>
+      <p class="tiny muted" style="margin-top:10px;">
+        Tip: bookmark your secret host link so your key auto-fills.
+      </p>
     </div>
 
     <div class="card" id="lobbyCard" style="display:none">
       <h2>Lobby</h2>
       <div class="pill">Code: <span id="code"></span></div>
-      <div class="muted tiny">Join link: <span id="joinLink"></span></div>
+      <div class="muted tiny" style="margin-top:8px;">Join link: <span id="joinLink"></span></div>
+      <div class="muted tiny">Player view: <span id="playLink"></span></div>
 
-      <div class="grid2">
+      <div class="grid2" style="margin-top:10px;">
         <button class="btn" id="startBtn">Start Round</button>
         <button class="btn outline" id="endBtn">End Round</button>
-        <button class="btn outline" id="resetBtn">Reset Lobby (new board)</button>
+        <button class="btn outline" id="resetBtn">Next Round (new board)</button>
         <a class="btn outline" id="watchBtn" href="#" target="_blank">Open Player View</a>
       </div>
 
@@ -54,13 +66,39 @@
         <div><b>Players:</b> <span id="playersCount"></span> / 10</div>
       </div>
 
+      <div class="row">
+        <div><b>Mode:</b> <span id="modeLabel"></span></div>
+        <div><b>Entry:</b> <span id="entryLabel"></span></div>
+      </div>
+
+      <div id="ticketTools" style="display:none">
+        <div class="hr"></div>
+        <h3>Tickets</h3>
+
+        <div class="row">
+          <label>Generate</label>
+          <input id="ticketCount" value="10" />
+        </div>
+
+        <button class="btn outline" id="genTicketsBtn">Generate Tickets</button>
+        <p class="tiny muted" style="margin-top:10px;">
+          These are single-use. Copy & DM to paying players.
+        </p>
+
+        <textarea id="ticketList" placeholder="Tickets will appear here..."
+          style="width:100%;min-height:130px;border-radius:12px;padding:10px;background:rgba(11,15,25,.55);color:var(--text);border:1px solid rgba(39,50,74,1);"></textarea>
+
+        <button class="btn outline" id="copyTicketsBtn">Copy Tickets</button>
+      </div>
+
+      <div class="hr"></div>
       <h3>Leaderboard</h3>
       <div id="teamsBox" style="display:none"></div>
       <div id="lb"></div>
     </div>
 
     <p class="tiny muted">
-      Host access is private. Bookmark your secret host link.
+      Public viewers should not see this page unless they have your secret host link.
     </p>
   </div>
 
@@ -72,14 +110,13 @@ function getParam(name) {
   const params = new URLSearchParams(window.location.search);
   return params.get(name);
 }
-
 const urlKey = getParam("host_key");
 if (urlKey) {
   document.getElementById("hostKey").value = urlKey;
 }
 
 /* ------------------------------
-   Helper functions
+   Helpers
 --------------------------------*/
 function el(id){ return document.getElementById(id); }
 
@@ -140,16 +177,23 @@ async function hostPost(path, body){
   return res.json();
 }
 
+/* ------------------------------
+   Lobby state
+--------------------------------*/
 let lobbyCode = null;
 
 async function refreshLobby(){
   if(!lobbyCode) return;
+
   const res = await fetch(`/api/lobby/${lobbyCode}`);
   const data = await res.json();
   if(!data.ok) return;
 
   el("status").textContent = data.lobby.status;
   el("playersCount").textContent = data.lobby.player_count;
+  el("modeLabel").textContent = (data.lobby.mode === "teams") ? "Teams" : "Solo";
+  el("entryLabel").textContent = (data.lobby.entry_mode === "ticket") ? "Ticket Required" : "Free";
+
   el("lb").innerHTML = lbHtml(data.leaderboard);
 
   if(data.lobby.mode === "teams"){
@@ -159,16 +203,21 @@ async function refreshLobby(){
     el("teamsBox").style.display = "none";
     el("teamsBox").innerHTML = "";
   }
+
+  // Show ticket tools only for ticket lobbies
+  const showTickets = (data.lobby.entry_mode === "ticket");
+  el("ticketTools").style.display = showTickets ? "block" : "none";
 }
 
 /* ------------------------------
-   Button handlers
+   Buttons
 --------------------------------*/
 el("createBtn").onclick = async ()=>{
   const mode = el("mode").value;
   const size = parseInt(el("size").value, 10);
+  const entry_mode = el("entryMode").value;
 
-  const out = await hostPost("/api/host/create_lobby", {mode, size});
+  const out = await hostPost("/api/host/create_lobby", {mode, size, entry_mode});
   if(!out.ok){
     alert(out.error || "Failed to create lobby");
     return;
@@ -177,28 +226,70 @@ el("createBtn").onclick = async ()=>{
   lobbyCode = out.lobby.code;
   el("lobbyCard").style.display = "block";
   el("code").textContent = lobbyCode;
-  el("joinLink").textContent = `${location.origin}/join`;
-  el("watchBtn").href = `${location.origin}/play/${lobbyCode}`;
+
+  const joinUrl = `${location.origin}/join`;
+  const playUrl = `${location.origin}/play/${lobbyCode}`;
+
+  el("joinLink").textContent = joinUrl;
+  el("playLink").textContent = playUrl;
+  el("watchBtn").href = playUrl;
+
+  // Clear ticket list when creating a new lobby
+  el("ticketList").value = "";
 
   refreshLobby();
 };
 
 el("startBtn").onclick = async ()=>{
   if(!lobbyCode) return;
-  await hostPost(`/api/host/start_round/${lobbyCode}`);
+  const out = await hostPost(`/api/host/start_round/${lobbyCode}`, {});
+  if(!out.ok) alert(out.error || "Failed to start round");
   refreshLobby();
 };
 
 el("endBtn").onclick = async ()=>{
   if(!lobbyCode) return;
-  await hostPost(`/api/host/end_round/${lobbyCode}`);
+  const out = await hostPost(`/api/host/end_round/${lobbyCode}`, {});
+  if(!out.ok) alert(out.error || "Failed to end round");
   refreshLobby();
 };
 
 el("resetBtn").onclick = async ()=>{
   if(!lobbyCode) return;
-  await hostPost(`/api/host/reset_lobby/${lobbyCode}`);
+  const out = await hostPost(`/api/host/reset_lobby/${lobbyCode}`, {});
+  if(!out.ok) alert(out.error || "Failed to reset lobby");
+  // new board + waiting state
   refreshLobby();
+};
+
+el("genTicketsBtn").onclick = async ()=>{
+  if(!lobbyCode) return;
+
+  const count = parseInt(el("ticketCount").value || "10", 10);
+  const out = await hostPost(`/api/host/generate_tickets/${lobbyCode}`, {count});
+
+  if(!out.ok){
+    alert(out.error || "Failed to generate tickets");
+    return;
+  }
+
+  const existing = el("ticketList").value.trim();
+  const add = (out.tickets || []).join("\n");
+  el("ticketList").value = (existing ? existing + "\n" : "") + add;
+};
+
+el("copyTicketsBtn").onclick = async ()=>{
+  const text = el("ticketList").value.trim();
+  if(!text){
+    alert("No tickets yet.");
+    return;
+  }
+  try{
+    await navigator.clipboard.writeText(text);
+    alert("Tickets copied!");
+  }catch(e){
+    alert("Could not copy automatically. You can manually select + copy.");
+  }
 };
 
 setInterval(refreshLobby, 1000);
