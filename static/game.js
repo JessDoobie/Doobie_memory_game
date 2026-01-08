@@ -20,6 +20,10 @@ function pausePolling(ms){
   pauseUntil = Math.max(pauseUntil, Date.now() + ms);
 }
 
+function isMobile(){
+  return window.innerWidth < 520 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 // ------------------------------
 // Sound (per player, stored locally)
 // ------------------------------
@@ -36,12 +40,8 @@ function syncSoundUI(){
   const volLabel = $("volLabel");
 
   if(cb) cb.checked = soundOn;
-  if(vol){
-    vol.value = String(Math.round(soundVol * 100));
-  }
-  if(volLabel){
-    volLabel.textContent = Math.round(soundVol * 100);
-  }
+  if(vol) vol.value = String(Math.round(soundVol * 100));
+  if(volLabel) volLabel.textContent = Math.round(soundVol * 100);
 }
 
 function setSound(on){
@@ -71,7 +71,6 @@ function beep(type){
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
 
-    // tones
     let freq = 660;
     let dur = 0.08;
     if(type === "match"){ freq = 880; dur = 0.09; }
@@ -122,24 +121,21 @@ function escapeHtml(s){
 }
 
 function computeColumns(size){
-  // Size is 4 or 6
   const isLandscape = window.matchMedia("(orientation: landscape)").matches;
   const wide = window.innerWidth >= 700;
 
   if(size === 4) return 4;
 
-  // size === 6
   if(isLandscape || wide) return 6;
   return 4; // portrait phones: bigger tap targets, more rows
 }
 
 // ------------------------------
-// Confetti (lightweight)
+// Confetti (lightweight particles)
 // ------------------------------
 let didConfetti = false;
 
 function confettiBurst(){
-  // safe no-op if you don’t want it
   const host = document.body;
   if(!host) return;
 
@@ -154,7 +150,6 @@ function confettiBurst(){
     p.style.animationDuration = (1.4 + Math.random()*1.2) + "s";
     p.style.animationDelay = (Math.random()*0.12) + "s";
     host.appendChild(p);
-
     setTimeout(()=>p.remove(), 3000);
   }
 }
@@ -225,12 +220,12 @@ function renderGrid(state){
       lockInput = true;
 
       // ✅ KEY FIX: prevent polling redraw from "un-revealing" the first pick
-      pausePolling(1600);
+      pausePolling(isMobile() ? 2600 : 1600);
 
       await flip(idx);
 
       // keep UI stable for feedback (match/miss)
-      pausePolling(900);
+      pausePolling(isMobile() ? 1400 : 900);
 
       setTimeout(() => { lockInput = false; }, 220);
     };
@@ -260,7 +255,6 @@ function renderGrid(state){
   const curMisses = state.player.misses;
   const currentMatched = new Set(state.grid.matched || []);
 
-  // newly matched tiles
   const newlyMatched = [];
   currentMatched.forEach(i => {
     if(!prevMatchedSet.has(i)) newlyMatched.push(i);
@@ -365,8 +359,8 @@ async function flip(idx){
       // render immediately from flip response
       renderGrid(out.state);
 
-      // ✅ keep that state visible long enough to pick the 2nd card
-      pausePolling(1200);
+      // ✅ Optional upgrade: longer protected window on mobile
+      pausePolling(isMobile() ? 1800 : 1200);
     }
   }catch(e){
     // ignore
@@ -374,12 +368,11 @@ async function flip(idx){
 }
 
 window.addEventListener("resize", () => {
-  // re-render quickly on orientation change
   getState();
 });
 
 // Kick things off
 getState();
 
-// Poll server state
-setInterval(getState, 750);
+// Poll server state (slower on mobile = less mid-turn overwrite)
+setInterval(getState, isMobile() ? 1100 : 750);
