@@ -7,16 +7,18 @@
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-  <div id="warmup">
-  <div class="box">
-    <h2>Warming up…</h2>
-    <div class="spinner"></div>
-    <p>Hang tight 🫶</p>
-  </div>
-</div>
-
   <div class="wrap">
-    <h1>✅ Join a Game</h1>
+    <h1>🧩 Join a Game</h1>
+    <p class="muted">Enter the lobby code from the host.</p>
+
+    <!-- Optional warmup overlay (works if you added it) -->
+    <div id="warmup" style="display:none">
+      <div class="box">
+        <h2>Warming up…</h2>
+        <div class="spinner"></div>
+        <p>Hang tight 🫶</p>
+      </div>
+    </div>
 
     <div class="card">
       <div class="row">
@@ -25,45 +27,165 @@
       </div>
 
       <div class="row">
-        <label>Name</label>
-        <input id="name" placeholder="Jessica" autocomplete="off" />
+        <label>Your Name</label>
+        <input id="name" placeholder="Jess" maxlength="20" autocomplete="off" />
       </div>
 
-      <div class="row">
-        <label>Team (only if Teams mode)</label>
-        <input id="team" placeholder="Team A" autocomplete="off" />
+      <div class="row" id="teamRow" style="display:none">
+        <label>Team (teams mode only)</label>
+        <input id="team" placeholder="Team Pink" maxlength="16" autocomplete="off" />
+      </div>
+
+      <div class="row" id="ticketRow" style="display:none">
+        <label>Ticket Code</label>
+        <input id="ticket" placeholder="XXXXXXXXXX" autocomplete="off" />
       </div>
 
       <button class="btn" id="joinBtn">Join</button>
-      <p class="tiny muted" id="msg"></p>
+
+      <p class="tiny muted" id="lobbyHint" style="margin-top:10px;"></p>
+      <p class="tiny muted" id="error" style="margin-top:6px;"></p>
     </div>
 
-    <p class="tiny muted">After joining, you’ll be sent to the game screen.</p>
+    <p class="tiny muted">
+      If the server is sleeping (free hosting), the first load can take a moment.
+    </p>
   </div>
 
 <script>
 function el(id){ return document.getElementById(id); }
 
-el("joinBtn").onclick = async ()=>{
-  el("msg").textContent = "";
+function showError(msg){
+  el("error").textContent = msg || "";
+}
+
+function setHint(msg){
+  el("lobbyHint").textContent = msg || "";
+}
+
+function setWarmup(on){
+  const w = el("warmup");
+  if(!w) return;
+  w.style.display = on ? "flex" : "none";
+}
+
+let lastLobbyInfo = null;
+
+async function fetchLobbyInfo(code){
+  if(!code) return null;
+  try{
+    const res = await fetch(`/api/lobby/${code}`);
+    const out = await res.json();
+    if(out.ok) return out;
+  }catch(e){}
+  return null;
+}
+
+async function updateFromLobby(){
   const code = el("code").value.trim().toUpperCase();
-  const name = el("name").value.trim();
-  const team = el("team").value.trim();
+  showError("");
+  setHint("");
 
-  const res = await fetch("/api/join", {
-    method:"POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({code, name, team})
-  });
-  const out = await res.json();
-
-  if(!out.ok){
-    el("msg").textContent = out.error || "Could not join.";
+  if(!code){
+    el("teamRow").style.display = "none";
+    el("ticketRow").style.display = "none";
     return;
   }
 
-  localStorage.setItem("mm_player_id_"+code, out.player_id);
-  window.location.href = out.play_url;
+  // show warmup only if request takes a moment
+  const warmTimer = setTimeout(() => setWarmup(true), 500);
+
+  const info = await fetchLobbyInfo(code);
+
+  clearTimeout(warmTimer);
+  setWarmup(false);
+
+  if(!info){
+    lastLobbyInfo = null;
+    el("teamRow").style.display = "none";
+    el("ticketRow").style.display = "none";
+    setHint("Couldn’t find that lobby yet. Double-check the code.");
+    return;
+  }
+
+  lastLobbyInfo = info;
+
+  const lobby = info.lobby;
+
+  // Teams field
+  const isTeams = (lobby.mode === "teams");
+  el("teamRow").style.display = isTeams ? "flex" : "none";
+  if(!isTeams) el("team").value = "";
+
+  // Ticket field
+  const needsTicket = (lobby.entry_mode === "ticket");
+  el("ticketRow").style.display = needsTicket ? "flex" : "none";
+  if(!needsTicket) el("ticket").value = "";
+
+  // Helpful hint text
+  const entryText = needsTicket ? "Ticket required" : "Free entry";
+  setHint(`Lobby: ${lobby.mode.toUpperCase()} • ${lobby.size}x${lobby.size} • ${entryText} • Players: ${lobby.player_count}/10 • Status: ${lobby.status}`);
+}
+
+el("code").addEventListener("blur", updateFromLobby);
+el("code").addEventListener("change", updateFromLobby);
+
+// Also update while typing, but not too often
+let tmr = null;
+el("code").addEventListener("input", () => {
+  clearTimeout(tmr);
+  tmr = setTimeout(updateFromLobby, 350);
+});
+
+el("joinBtn").onclick = async ()=>{
+  showError("");
+
+  const code = el("code").value.trim().toUpperCase();
+  const name = el("name").value.trim();
+  const team = el("team").value.trim();
+  const ticket = el("ticket").value.trim().toUpperCase();
+
+  if(!code){
+    showError("Please enter the lobby code.");
+    return;
+  }
+  if(!name){
+    showError("Please enter your name.");
+    return;
+  }
+
+  // If we already know lobby needs ticket, enforce client-side too
+  const needsTicket = lastLobbyInfo?.lobby?.entry_mode === "ticket";
+  if(needsTicket && !ticket){
+    showError("Ticket code required for this lobby.");
+    return;
+  }
+
+  setWarmup(true);
+
+  try{
+    const res = await fetch("/api/join", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({code, name, team, ticket})
+    });
+    const out = await res.json();
+
+    if(!out.ok){
+      setWarmup(false);
+      showError(out.error || "Join failed.");
+      return;
+    }
+
+    // Save player id so /play can find you
+    localStorage.setItem("mm_player_id_" + code, out.player_id);
+
+    // Go to play page
+    window.location.href = `/play/${code}`;
+  }catch(e){
+    setWarmup(false);
+    showError("Network error. Try again.");
+  }
 };
 </script>
 </body>
