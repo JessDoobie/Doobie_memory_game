@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Host • Memory Match</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎛️ Host Dashboard</h1>
+    <p class="muted">Create a lobby, share the code, start the round when ready.</p>
+
+    <div class="card">
+      <div class="row">
+        <label>Host Key</label>
+        <input id="hostKey" placeholder="Enter host key" />
+      </div>
+
+      <div class="row">
+        <label>Mode</label>
+        <select id="mode">
+          <option value="solo">Solo</option>
+          <option value="teams">Teams</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label>Board Size</label>
+        <select id="size">
+          <option value="4">4x4 (quick)</option>
+          <option value="6" selected>6x6 (standard)</option>
+        </select>
+      </div>
+
+      <button class="btn" id="createBtn">Create Lobby</button>
+    </div>
+
+    <div class="card" id="lobbyCard" style="display:none">
+      <h2>Lobby</h2>
+      <div class="pill">Code: <span id="code"></span></div>
+      <div class="muted tiny">Join link: <span id="joinLink"></span></div>
+
+      <div class="grid2">
+        <button class="btn" id="startBtn">Start Round</button>
+        <button class="btn outline" id="endBtn">End Round</button>
+        <button class="btn outline" id="resetBtn">Reset Lobby (new board)</button>
+        <a class="btn outline" id="watchBtn" href="#" target="_blank">Open Player View</a>
+      </div>
+
+      <div class="hr"></div>
+      <div class="row">
+        <div><b>Status:</b> <span id="status"></span></div>
+        <div><b>Players:</b> <span id="playersCount"></span> / 10</div>
+      </div>
+
+      <h3>Leaderboard</h3>
+      <div id="teamsBox" style="display:none"></div>
+      <div id="lb"></div>
+    </div>
+
+    <p class="tiny muted">
+      Render tip: set environment variable <b>HOST_KEY</b> to something private.
+    </p>
+  </div>
+
+<script>
+let lobbyCode = null;
+
+function el(id){ return document.getElementById(id); }
+
+function lbHtml(data){
+  const p = data.players || [];
+  let html = `<table class="tbl"><tr><th>#</th><th>Name</th><th>Team</th><th>Score</th><th>Matches</th><th>Misses</th></tr>`;
+  p.forEach((r,i)=>{
+    html += `<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.team||"")}</td><td>${r.score}</td><td>${r.matches}</td><td>${r.misses}</td></tr>`;
+  });
+  html += `</table>`;
+  return html;
+}
+
+function teamsHtml(data){
+  const t = data.teams || [];
+  if(!t.length) return "";
+  let html = `<div class="card inner"><h4>Teams (best 3 combined)</h4>`;
+  html += `<table class="tbl"><tr><th>#</th><th>Team</th><th>Score</th><th>Top 3</th></tr>`;
+  t.forEach((r,i)=>{
+    html += `<tr><td>${i+1}</td><td>${escapeHtml(r.team)}</td><td>${r.score}</td><td>${escapeHtml((r.members||[]).join(", "))}</td></tr>`;
+  });
+  html += `</table></div>`;
+  return html;
+}
+
+function escapeHtml(s){
+  return (s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+}
+
+async function hostPost(path, body){
+  const hostKey = el("hostKey").value.trim();
+  const res = await fetch(path, {
+    method:"POST",
+    headers: {"Content-Type":"application/json", "X-Host-Key": hostKey},
+    body: JSON.stringify(body || {})
+  });
+  return res.json();
+}
+
+async function refreshLobby(){
+  if(!lobbyCode) return;
+  const res = await fetch(`/api/lobby/${lobbyCode}`);
+  const data = await res.json();
+  if(!data.ok) return;
+
+  el("status").textContent = data.lobby.status;
+  el("playersCount").textContent = data.lobby.player_count;
+  el("lb").innerHTML = lbHtml(data.leaderboard);
+
+  if(data.lobby.mode === "teams"){
+    el("teamsBox").style.display = "block";
+    el("teamsBox").innerHTML = teamsHtml(data.leaderboard);
+  } else {
+    el("teamsBox").style.display = "none";
+    el("teamsBox").innerHTML = "";
+  }
+}
+
+el("createBtn").onclick = async ()=>{
+  const mode = el("mode").value;
+  const size = parseInt(el("size").value, 10);
+
+  const out = await hostPost("/api/host/create_lobby", {mode, size});
+  if(!out.ok){
+    alert(out.error || "Failed");
+    return;
+  }
+  lobbyCode = out.lobby.code;
+  el("lobbyCard").style.display = "block";
+  el("code").textContent = lobbyCode;
+
+  const joinUrl = `${location.origin}/join`;
+  el("joinLink").textContent = joinUrl;
+
+  el("watchBtn").href = `${location.origin}/play/${lobbyCode}`;
+  await refreshLobby();
+};
+
+el("startBtn").onclick = async ()=>{
+  if(!lobbyCode) return;
+  const out = await hostPost(`/api/host/start_round/${lobbyCode}`, {});
+  if(!out.ok) alert(out.error || "Failed to start");
+  await refreshLobby();
+};
+
+el("endBtn").onclick = async ()=>{
+  if(!lobbyCode) return;
+  const out = await hostPost(`/api/host/end_round/${lobbyCode}`, {});
+  if(!out.ok) alert(out.error || "Failed to end");
+  await refreshLobby();
+};
+
+el("resetBtn").onclick = async ()=>{
+  if(!lobbyCode) return;
+  const out = await hostPost(`/api/host/reset_lobby/${lobbyCode}`, {});
+  if(!out.ok) alert(out.error || "Failed to reset");
+  await refreshLobby();
+};
+
+setInterval(refreshLobby, 1000);
+</script>
+</body>
+</html>
