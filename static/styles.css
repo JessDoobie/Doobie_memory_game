@@ -182,7 +182,11 @@ input::placeholder{
   color: #e8ebf3;
   font-size: 28px;
   cursor: pointer;
-  transition: transform .12s ease, background .12s ease;
+  transition: transform .12s ease, background .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+
+.tile:active{
+  transform: scale(.98);
 }
 
 .tile.hidden{
@@ -192,6 +196,8 @@ input::placeholder{
 
 .tile.revealed{
   background: rgba(125,79,255,.15);
+  border-color: rgba(125,79,255,.55);
+  box-shadow: 0 0 0 2px rgba(125,79,255,.18) inset;
 }
 
 .tile.matched{
@@ -224,6 +230,12 @@ input::placeholder{
               0 12px 30px rgba(0,0,0,.25);
 }
 
+/* ✅ FIX: game.js adds "shake" class, so support that */
+.grid.shake{
+  animation: shake 220ms ease-out;
+}
+
+/* (kept for backward-compat if you ever used it) */
 #grid.grid-shake{
   animation: shake 220ms ease-out;
 }
@@ -304,7 +316,29 @@ input::placeholder{
 }
 
 /* ------------------------------
-   Confetti Canvas
+   Confetti (particles used by game.js)
+--------------------------------*/
+@keyframes confettiFall{
+  0%   { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0.9; }
+}
+
+.confetti{
+  position: fixed;
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
+  z-index: 60;
+  pointer-events: none;
+  /* no fixed color requirement from you, so keep it varied but not hard-coded via theme */
+  background: linear-gradient(180deg, rgba(125,79,255,.95), rgba(80,200,120,.9));
+  animation-name: confettiFall;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}
+
+/* ------------------------------
+   Confetti Canvas (older / optional)
 --------------------------------*/
 #confetti{
   display: none;
