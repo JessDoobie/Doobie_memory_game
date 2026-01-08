@@ -1,6 +1,5 @@
 function $(id){ return document.getElementById(id); }
 
-// Provided by play.html
 const code = window.MM_CODE;
 const playerKey = "mm_player_id_" + code;
 let playerId = localStorage.getItem(playerKey);
@@ -12,15 +11,40 @@ if(!playerId){
 let lockInput = false;
 
 /* ------------------------------
-   FX STATE + AUDIO
+   PER-PLAYER SOUND SETTINGS
 --------------------------------*/
-let prevMatches = null;
+const soundKey = `mm_sound_${code}_${playerId}`;
+const volKey   = `mm_vol_${code}_${playerId}`;
+
+function loadSoundPrefs(){
+  const enabled = localStorage.getItem(soundKey);
+  const vol = localStorage.getItem(volKey);
+
+  const enabledBool = (enabled === null) ? true : (enabled === "1");
+  const volNum = (vol === null) ? 45 : Math.max(0, Math.min(100, parseInt(vol, 10) || 45));
+
+  return { enabled: enabledBool, vol: volNum };
+}
+
+function saveSoundPrefs(enabled, vol){
+  localStorage.setItem(soundKey, enabled ? "1" : "0");
+  localStorage.setItem(volKey, String(vol));
+}
+
+let SOUND = loadSoundPrefs();
+
+/* ------------------------------
+   FX STATE + AUDIO ENGINE
+--------------------------------*/
 let prevMisses = null;
 let prevMatchedSet = new Set();
+let prevFinished = false;
 
 let audioCtx = null;
 
 function ensureAudio(){
+  if(!SOUND.enabled) return;
+
   if(!audioCtx){
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if(Ctx) audioCtx = new Ctx();
@@ -30,7 +54,8 @@ function ensureAudio(){
   }
 }
 
-function beep(type){
+function playTone(type){
+  if(!SOUND.enabled) return;
   ensureAudio();
   if(!audioCtx) return;
 
@@ -40,24 +65,38 @@ function beep(type){
   o.connect(g);
   g.connect(audioCtx.destination);
 
+  // Volume scaling (0..100 -> 0..1)
+  const V = Math.max(0, Math.min(1, SOUND.vol / 100));
+  const peak = 0.22 * V; // master peak
+
   if(type === "match"){
     o.type = "triangle";
     o.frequency.setValueAtTime(740, t0);
     o.frequency.exponentialRampToValueAtTime(980, t0 + 0.08);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), t0 + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
     o.start(t0);
     o.stop(t0 + 0.16);
-  } else {
+  } else if(type === "miss"){
     o.type = "sine";
     o.frequency.setValueAtTime(220, t0);
     o.frequency.exponentialRampToValueAtTime(160, t0 + 0.10);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), t0 + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
     o.start(t0);
     o.stop(t0 + 0.18);
+  } else if(type === "win"){
+    // little 2-tone celebration
+    o.type = "triangle";
+    o.frequency.setValueAtTime(660, t0);
+    o.frequency.exponentialRampToValueAtTime(990, t0 + 0.10);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+    o.start(t0);
+    o.stop(t0 + 0.24);
   }
 }
 
@@ -68,6 +107,88 @@ function shakeGrid(){
   void grid.offsetWidth;
   grid.classList.add("grid-shake");
   setTimeout(()=>grid.classList.remove("grid-shake"), 260);
+}
+
+/* ------------------------------
+   CONFETTI (canvas)
+--------------------------------*/
+let confettiRunning = false;
+
+function startConfetti(){
+  const canvas = $("confetti");
+  if(!canvas || confettiRunning) return;
+
+  confettiRunning = true;
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+
+  function resize(){
+    canvas.style.display = "block";
+    canvas.style.position = "fixed";
+    canvas.style.inset = "0";
+    canvas.style.pointerEvents = "none";
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  const W = () => canvas.width;
+  const H = () => canvas.height;
+
+  const pieces = [];
+  const N = 140;
+
+  for(let i=0;i<N;i++){
+    pieces.push({
+      x: Math.random() * W(),
+      y: -Math.random() * H()*0.7,
+      r: 3 + Math.random()*6,
+      vy: 1.5 + Math.random()*3.8,
+      vx: -1 + Math.random()*2,
+      rot: Math.random()*Math.PI,
+      vr: -0.15 + Math.random()*0.3,
+      a: 1
+    });
+  }
+
+  const start = performance.now();
+  const duration = 2600; // ms
+
+  function draw(ts){
+    const t = ts - start;
+    ctx.clearRect(0,0,W(),H());
+
+    pieces.forEach(p=>{
+      p.x += p.vx * dpr;
+      p.y += p.vy * dpr;
+      p.rot += p.vr;
+
+      // fade out near end
+      const k = Math.min(1, Math.max(0, (duration - t)/700));
+      p.a = k;
+
+      ctx.save();
+      ctx.globalAlpha = p.a;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      // random-ish colors without specifying a palette array
+      ctx.fillStyle = `hsl(${Math.floor((p.x+p.y) % 360)}, 90%, 60%)`;
+      ctx.fillRect(-p.r, -p.r, p.r*2, p.r*1.2);
+      ctx.restore();
+    });
+
+    if(t < duration){
+      requestAnimationFrame(draw);
+    } else {
+      ctx.clearRect(0,0,W(),H());
+      canvas.style.display = "none";
+      confettiRunning = false;
+      window.removeEventListener("resize", resize);
+    }
+  }
+
+  requestAnimationFrame(draw);
 }
 
 /* ------------------------------
@@ -87,6 +208,32 @@ function computeColumns(size){
   if(size === 4) return 4;
   if(isLandscape || wide) return 6;
   return 4;
+}
+
+/* ------------------------------
+   UI: Sound controls wiring
+--------------------------------*/
+function initSoundControls(){
+  const chk = $("soundEnabled");
+  const rng = $("soundVol");
+  if(!chk || !rng) return;
+
+  chk.checked = SOUND.enabled;
+  rng.value = String(SOUND.vol);
+
+  chk.addEventListener("change", ()=>{
+    SOUND.enabled = chk.checked;
+    saveSoundPrefs(SOUND.enabled, SOUND.vol);
+    if(SOUND.enabled) ensureAudio();
+  });
+
+  rng.addEventListener("input", ()=>{
+    SOUND.vol = parseInt(rng.value || "45", 10);
+    saveSoundPrefs(SOUND.enabled, SOUND.vol);
+  });
+
+  // unlock audio on first tap anywhere
+  document.addEventListener("pointerdown", ensureAudio, { once: true });
 }
 
 /* ------------------------------
@@ -163,17 +310,17 @@ function renderGrid(state){
   }
 
   /* ---- MATCH / MISS FX ---- */
-  const curMatches = state.player.matches;
   const curMisses = state.player.misses;
   const currentMatched = new Set(state.grid.matched || []);
 
+  // newly matched tiles
   const newlyMatched = [];
   currentMatched.forEach(i => {
     if(!prevMatchedSet.has(i)) newlyMatched.push(i);
   });
 
   if(newlyMatched.length){
-    beep("match");
+    playTone("match");
     newlyMatched.forEach(i => {
       const btn = grid.querySelector(`.tile[data-idx="${i}"]`);
       if(btn){
@@ -183,14 +330,22 @@ function renderGrid(state){
     });
   }
 
+  // miss increased
   if(prevMisses !== null && curMisses > prevMisses){
-    beep("miss");
+    playTone("miss");
     shakeGrid();
   }
 
-  prevMatches = curMatches;
+  // confetti on win transition
+  const finishedNow = !!state.player.finished;
+  if(finishedNow && !prevFinished){
+    playTone("win");
+    startConfetti();
+  }
+
   prevMisses = curMisses;
   prevMatchedSet = currentMatched;
+  prevFinished = finishedNow;
 }
 
 /* ------------------------------
@@ -282,5 +437,9 @@ window.addEventListener("resize", () => {
   getState();
 });
 
+/* ------------------------------
+   INIT
+--------------------------------*/
+initSoundControls();
 getState();
 setInterval(getState, 750);
