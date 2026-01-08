@@ -10,6 +10,67 @@ if(!playerId){
 }
 
 let lockInput = false;
+// --- FX state (to detect match/miss changes) ---
+let prevMatches = null;
+let prevMisses = null;
+let prevMatchedSet = new Set();
+
+// --- Tiny built-in sounds (no audio files needed) ---
+let audioCtx = null;
+
+function ensureAudio(){
+  if(!audioCtx){
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(Ctx) audioCtx = new Ctx();
+  }
+  // Some browsers start paused until a user gesture happens
+  if(audioCtx && audioCtx.state === "suspended"){
+    audioCtx.resume().catch(()=>{});
+  }
+}
+
+function beep(type){
+  ensureAudio();
+  if(!audioCtx) return;
+
+  const t0 = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+
+  o.connect(g);
+  g.connect(audioCtx.destination);
+
+  if(type === "match"){
+    o.type = "triangle";
+    o.frequency.setValueAtTime(740, t0);
+    o.frequency.exponentialRampToValueAtTime(980, t0 + 0.08);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+    o.start(t0);
+    o.stop(t0 + 0.16);
+  } else {
+    // miss
+    o.type = "sine";
+    o.frequency.setValueAtTime(220, t0);
+    o.frequency.exponentialRampToValueAtTime(160, t0 + 0.10);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+    o.start(t0);
+    o.stop(t0 + 0.18);
+  }
+}
+
+function shakeGrid(){
+  const grid = $("grid");
+  if(!grid) return;
+  grid.classList.remove("grid-shake");
+  // force reflow so animation restarts
+  void grid.offsetWidth;
+  grid.classList.add("grid-shake");
+  setTimeout(()=>grid.classList.remove("grid-shake"), 260);
+}
 
 function escapeHtml(s){
   return (s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
@@ -45,10 +106,12 @@ function renderGrid(state){
 
   grid.innerHTML = "";
 
-  faces.forEach((face, idx) => {
-    const tile = document.createElement("button");
-    tile.className = "tile";
-    tile.style.height = h + "px";
+ faces.forEach((face, idx) => {
+  const tile = document.createElement("button");
+  tile.className = "tile";
+  tile.dataset.idx = String(idx); 
+  tile.style.height = h + "px";
+
 
     if(matched.has(idx)){
       tile.classList.add("matched");
