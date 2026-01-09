@@ -122,13 +122,21 @@ function escapeHtml(s){
 
 function computeColumns(size){
   const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-  const wide = window.innerWidth >= 700;
+  const w = window.innerWidth;
 
+  // 4x4 should always be 4 columns
   if(size === 4) return 4;
 
-  if(isLandscape || wide) return 6;
-  return 4; // portrait phones: bigger tap targets, more rows
+  // 6x6:
+  // - landscape / wider screens: 6 columns
+  if(isLandscape || w >= 700) return 6;
+
+  // - portrait phones: use 6 columns if the phone isn't tiny, otherwise 5
+  //   (prevents 9 tall rows + scrolling)
+  if(w >= 380) return 6;
+  return 5;
 }
+
 
 // ------------------------------
 // Confetti (lightweight particles)
@@ -184,9 +192,19 @@ function renderGrid(state){
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
 
   // Determine tile height based on screen
-  let h = 78;
-  if(size === 6 && cols === 4 && window.innerHeight < 760) h = 64;
-  if(window.innerWidth < 380) h = Math.max(58, h - 8);
+let h = 78;
+
+// 6x6 needs to be more compact on phones
+if(size === 6){
+  if(cols === 6) h = 56;
+  if(cols === 5) h = 60;
+
+  if(window.innerHeight < 740) h -= 6;
+  if(window.innerHeight < 680) h -= 6;
+}
+
+if(window.innerWidth < 380) h = Math.max(44, h - 6);
+
 
   grid.innerHTML = "";
 
