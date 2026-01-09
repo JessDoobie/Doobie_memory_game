@@ -180,7 +180,7 @@ input::placeholder{
   border: 1px solid rgba(39,50,74,1);
   background: rgba(17,22,36,.9);
   color: #e8ebf3;
-  font-size: 28px;
+  font-size: clamp(32px, 5vw, 44px);
   cursor: pointer;
   transition: transform .12s ease, background .12s ease, box-shadow .12s ease, border-color .12s ease;
 }
