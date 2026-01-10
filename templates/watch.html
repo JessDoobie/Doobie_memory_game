@@ -5,140 +5,71 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Watch • {{ code }}</title>
   <link rel="stylesheet" href="/static/styles.css">
+
+  <style>
+    /* Bigger, overlay-friendly */
+    .overlayWrap{ max-width: 900px; margin: 0 auto; padding: 14px; }
+    .bigTitle{ font-size: 28px; margin: 0 0 6px 0; }
+    .sub{ font-size: 14px; color: #9aa3c7; margin: 0 0 10px 0; }
+    .pillRow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin: 10px 0; }
+    .tbl{ font-size: 16px; }
+    .tbl th{ font-size: 14px; }
+
+    /* Overlay mode: transparent page, only card shows */
+    body.overlayMode{
+      background: transparent !important;
+    }
+    body.overlayMode .overlayWrap{
+      max-width: 720px;
+    }
+    body.overlayMode .bigTitle,
+    body.overlayMode .sub{
+      display: none; /* cleaner for streams */
+    }
+
+    /* Tiny hint for you (not shown in overlay mode) */
+    .modeNote{
+      margin-top: 10px;
+      font-size: 12px;
+      color: #9aa3c7;
+    }
+
+    @media (max-width:520px){
+      .tbl{ font-size: 14px; }
+    }
+  </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <div>
-        <h1 style="margin:0;">👀 Watch</h1>
-        <div class="tiny muted">Lobby: <b>{{ code }}</b></div>
-      </div>
-      <a class="btn outline" href="/join">Join</a>
-    </div>
+  <div class="overlayWrap">
+    <h1 class="bigTitle">📺 Live Leaderboard</h1>
+    <p class="sub">Lobby: <b id="codeTxt">{{ code }}</b> • Updates automatically</p>
 
     <div class="card">
-      <div class="row">
-        <div id="status">Status:</div>
-        <div id="meta" class="muted tiny"></div>
+      <div class="pillRow">
+        <span class="pill" id="statusPill">Status: —</span>
+        <span class="pill" id="playersPill">Players: —</span>
+        <span class="pill" id="modePill">Mode: —</span>
+        <span class="pill" id="boardPill">Board: —</span>
       </div>
-      <div id="prizesBox" class="tiny muted"></div>
-    </div>
 
-    <div class="card">
-      <h3 style="margin-top:0;">Leaderboard</h3>
+      <div class="hr"></div>
+
       <div id="teamsBox" style="display:none"></div>
       <div id="lb"></div>
+
+      <p class="tiny muted" id="hint" style="margin-top:10px;"></p>
     </div>
+
+    <div class="modeNote" id="modeNote"></div>
   </div>
 
-<script>
-const code = "{{ code }}";
-
-function el(id){ return document.getElementById(id); }
-function escapeHtml(s){
-  return (s||"")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;");
-}
-
-function lbHtml(players){
-  let html = `<table class="tbl">
-    <tr><th>#</th><th>Name</th><th>Team</th><th>Score</th><th>Matches</th><th>Misses</th></tr>`;
-  (players||[]).slice(0,10).forEach((r,i)=>{
-    html += `<tr>
-      <td>${i+1}</td>
-      <td>${escapeHtml(r.name)}</td>
-      <td>${escapeHtml(r.team||"")}</td>
-      <td>${r.score}</td>
-      <td>${r.matches}</td>
-      <td>${r.misses}</td>
-    </tr>`;
-  });
-  html += `</table>`;
-  return html;
-}
-
-function teamsHtml(teams){
-  let html = `<div class="card inner"><h4>Teams (best 3 combined)</h4>`;
-  html += `<table class="tbl"><tr><th>#</th><th>Team</th><th>Score</th><th>Top 3</th></tr>`;
-  (teams||[]).forEach((t,i)=>{
-    html += `<tr>
-      <td>${i+1}</td>
-      <td>${escapeHtml(t.team)}</td>
-      <td>${t.score}</td>
-      <td>${escapeHtml((t.members||[]).join(", "))}</td>
-    </tr>`;
-  });
-  html += `</table></div>`;
-  return html;
-}
-
-function renderPrizes(lobby, players, teams){
-  const p = lobby.prizes || {};
-  const has = (p["1"] || p["2"] || p["3"]);
-  if(!has){
-    el("prizesBox").innerHTML = "";
-    return;
-  }
-
-  const ended = lobby.status === "ended";
-  let html = `<b>Prizes</b>: `;
-  const parts = [];
-  if(p["1"]) parts.push(`1st: ${escapeHtml(p["1"])}`);
-  if(p["2"]) parts.push(`2nd: ${escapeHtml(p["2"])}`);
-  if(p["3"]) parts.push(`3rd: ${escapeHtml(p["3"])}`);
-  html += parts.join(" • ");
-
-  if(ended){
-    html += `<div class="hr"></div><b>Winners</b>: `;
-    if(lobby.mode === "teams"){
-      const t = (teams||[]);
-      const winParts = [];
-      if(t[0] && p["1"]) winParts.push(`1st: ${escapeHtml(t[0].team)}`);
-      if(t[1] && p["2"]) winParts.push(`2nd: ${escapeHtml(t[1].team)}`);
-      if(t[2] && p["3"]) winParts.push(`3rd: ${escapeHtml(t[2].team)}`);
-      html += winParts.length ? winParts.join(" • ") : "—";
-    } else {
-      const pl = (players||[]);
-      const winParts = [];
-      if(pl[0] && p["1"]) winParts.push(`1st: ${escapeHtml(pl[0].name)}`);
-      if(pl[1] && p["2"]) winParts.push(`2nd: ${escapeHtml(pl[1].name)}`);
-      if(pl[2] && p["3"]) winParts.push(`3rd: ${escapeHtml(pl[2].name)}`);
-      html += winParts.length ? winParts.join(" • ") : "—";
+  <script>
+    window.MM_WATCH_CODE = "{{ code }}";
+    window.MM_OVERLAY = new URLSearchParams(window.location.search).get("overlay") === "1";
+    if(window.MM_OVERLAY){
+      document.body.classList.add("overlayMode");
     }
-  }
-
-  el("prizesBox").innerHTML = html;
-}
-
-async function tick(){
-  try{
-    const res = await fetch(`/api/lobby/${code}`);
-    const out = await res.json();
-    if(!out.ok) return;
-
-    const lobby = out.lobby;
-    el("status").textContent = `Status: ${lobby.status}`;
-    el("meta").textContent = `Mode: ${lobby.mode.toUpperCase()} • Board: ${lobby.size}x${lobby.size} • Players: ${lobby.player_count}/10`;
-
-    el("lb").innerHTML = lbHtml(out.leaderboard.players);
-
-    if(lobby.mode === "teams" && (out.leaderboard.teams||[]).length){
-      el("teamsBox").style.display = "block";
-      el("teamsBox").innerHTML = teamsHtml(out.leaderboard.teams);
-    } else {
-      el("teamsBox").style.display = "none";
-      el("teamsBox").innerHTML = "";
-    }
-
-    renderPrizes(lobby, out.leaderboard.players, out.leaderboard.teams);
-  }catch(e){}
-}
-
-tick();
-setInterval(tick, 1000);
-</script>
+  </script>
+  <script src="/static/watch.js"></script>
 </body>
 </html>
