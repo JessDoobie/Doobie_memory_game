@@ -1,41 +1,27 @@
 import os
-import time
-import uuid
 import random
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
-
-from flask import Flask, render_template, request, jsonify, redirect, url_for, abort
+import time
+from flask import Flask, jsonify, request, render_template, redirect
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-change-me")
 
-# -----------------------------
-# In-memory storage
-# -----------------------------
-LOBBIES: Dict[str, "Lobby"] = {}
+# ----------------------------
+# Config
+# ----------------------------
+HOST_KEY = os.environ.get("HOST_KEY", "yourSecretKey")
 
-MAX_PLAYERS = 10
-PAIR_SCORE = 10
-MISS_PENALTY = 1
+# In-memory store (simple demo storage)
+LOBBIES = {}  # code -> lobby dict
 
-HOST_KEY = os.environ.get("HOST_KEY", "letmein")
+EMOJIS = list("🍓🍒🍉🍇🍍🥝🍑🍋🍏🍎🍐🍊🥥🥕🌽🍔🍟🍕🌮🍣🍪🍩🍰🧁🍫🍿🧠🦄🐶🐱🐻🐼🐸🐵🦊🐙🐳🦋🌈⭐️🔥💎🎀🎃🎄🎁🎮🎯🎲🎵🎧🚀🛸")
 
 
-def now_ms() -> int:
-    return int(time.time() * 1000)
-
-
-def clean_name(s: str) -> str:
-    s = (s or "").strip()
-    s = "".join(ch for ch in s if ch.isprintable())
-    return s[:20] if s else "Player"
-
-
-def clean_team(s: str) -> str:
-    s = (s or "").strip()
-    s = "".join(ch for ch in s if ch.isprintable())
-    return s[:16]
+# ----------------------------
+# Helpers
+# ----------------------------
+def require_host(req) -> bool:
+    key = req.headers.get("X-Host-Key", "")
+    return bool(key) and key == HOST_KEY
 
 
 def make_code(n=6) -> str:
@@ -43,207 +29,166 @@ def make_code(n=6) -> str:
     return "".join(random.choice(alphabet) for _ in range(n))
 
 
-# -------- Tickets --------
-TICKET_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+def make_player_id() -> str:
+    alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+    return "".join(random.choice(alphabet) for _ in range(12))
 
 
-def make_ticket(n=10) -> str:
-    return "".join(random.choice(TICKET_ALPHABET) for _ in range(n))
+def normalize_board(rows, cols):
+    """Validate + normalize board dims. Must be an even tile count."""
+    try:
+        rows = int(rows)
+        cols = int(cols)
+    except Exception:
+        return None, None, "Board rows/cols must be numbers."
+
+    tiles = rows * cols
+    if tiles % 2 != 0:
+        return None, None, "Board must have an even number of tiles (pairs)."
+
+    if tiles < 8:
+        return None, None, "Board is too small."
+    if tiles > 60:
+        return None, None, "Board is too large (max 60 tiles)."
+
+    return rows, cols, None
 
 
-def generate_board(seed: int, size: int) -> List[str]:
-    rng = random.Random(seed)
-    total = size * size
-    assert total % 2 == 0, "Board size must be even number of cards"
+def build_deck(rows, cols):
+    """Return shuffled list of emojis length rows*cols, containing pairs."""
+    tiles = rows * cols
+    pairs = tiles // 2
 
-    emoji_pool = [
-        "🍒","🍋","🍉","🍇","🍓","🍑","🍍","🥝","🍏","🍎","🍊","🥥",
-        "🧁","🍩","🍪","🍰","🍫","🍬","🍭","🍿","🧋","☕","🥨","🧀",
-        "🐶","🐱","🐼","🦊","🐸","🐵","🦄","🐙","🦋","🐝","🐢","🦖",
-        "⭐","🌙","⚡","🔥","🌈","❄️","🍀","🌸","🌵","🌊","🎈","🎁",
-        "🎮","🎲","🎧","🎸","🎨","🏆","⚽","🏀","🎯","🚀","🛸","🧠"
-    ]
-    pairs_needed = total // 2
-    faces = emoji_pool[:]
-    rng.shuffle(faces)
-    faces = faces[:pairs_needed]
+    pool = EMOJIS[:]
+    if pairs > len(pool):
+        # Rare unless you increase max tiles
+        pool = pool * ((pairs // len(pool)) + 1)
 
-    cards = faces + faces
-    rng.shuffle(cards)
-    return cards
+    random.shuffle(pool)
+    chosen = pool[:pairs]
+    deck = chosen + chosen
+    random.shuffle(deck)
+    return deck
 
 
-@dataclass
-class PlayerState:
-    player_id: str
-    name: str
-    team: str = ""
-    joined_ms: int = field(default_factory=now_ms)
+def init_round(lobby):
+    """Reset per-round fields: solution, faces, matched, etc."""
+    rows = int(lobby.get("rows", lobby.get("size", 6)))
+    cols = int(lobby.get("cols", lobby.get("size", 6)))
 
-    score: int = 0
-    matches: int = 0
-    misses: int = 0
-    flips: int = 0
-    finished_ms: Optional[int] = None
+    # Back-compat: if only size exists, treat as square
+    if "rows" not in lobby or "cols" not in lobby:
+        lobby["rows"] = rows
+        lobby["cols"] = cols
 
-    first_idx: Optional[int] = None
-    second_idx: Optional[int] = None
+    deck = build_deck(rows, cols)
+    tiles = rows * cols
 
-    revealed: Dict[int, int] = field(default_factory=dict)  # idx -> reveal_until_ms
-    matched: set = field(default_factory=set)
+    lobby["grid"] = {
+        "solution": deck,
+        "faces": [""] * tiles,
+        "matched": []
+    }
 
-    def is_finished(self, total_pairs: int) -> bool:
-        return self.matches >= total_pairs
+    # Keep mismatched tiles visible briefly before hiding
+    lobby["pending_hides"] = []  # list of {"a":int,"b":int,"hide_at":float}
 
+    lobby["status"] = "waiting"   # waiting -> running -> ended
+    lobby["allow_join"] = True
 
-@dataclass
-class Lobby:
-    code: str
-    mode: str = "solo"        # solo | teams
-    size: int = 6             # 4 or 6
-    created_ms: int = field(default_factory=now_ms)
-
-    status: str = "waiting"   # waiting | running | ended
-    seed: int = field(default_factory=lambda: random.randint(1, 2_000_000_000))
-    board: List[str] = field(default_factory=list)
-
-    started_ms: Optional[int] = None
-    ended_ms: Optional[int] = None
-
-    players: Dict[str, PlayerState] = field(default_factory=dict)
-
-    allow_join: bool = True
-
-    entry_mode: str = "free"  # free | ticket
-    tickets: Dict[str, bool] = field(default_factory=dict)  # ticket_code -> used?
-
-    # NEW: prizes by rank (simple)
-    # Example: {"1": "$25", "2": "$10", "3": "Nail set"}
-    prizes: Dict[str, str] = field(default_factory=dict)
-
-    def total_pairs(self) -> int:
-        return (self.size * self.size) // 2
-
-    def ensure_board(self):
-        if not self.board:
-            self.board = generate_board(self.seed, self.size)
+    # Reset all players for new round
+    for pid, p in lobby.get("players", {}).items():
+        p["score"] = 0
+        p["matches"] = 0
+        p["misses"] = 0
+        p["finished"] = False
+        p["revealed"] = []  # this player's current picks (0-2)
 
 
-def require_host(req) -> None:
-    key = req.headers.get("X-Host-Key") or req.args.get("host_key") or ""
-    if key != HOST_KEY:
-        abort(403)
+def apply_pending_hides(lobby):
+    """Hide any mismatched pairs whose timer expired."""
+    now = time.time()
+    pending = lobby.get("pending_hides", [])
+    if not pending:
+        return
+
+    grid = lobby["grid"]
+    keep = []
+    for item in pending:
+        if now >= item["hide_at"]:
+            a = item["a"]
+            b = item["b"]
+            # Only hide if not matched meanwhile
+            if a not in grid["matched"]:
+                grid["faces"][a] = ""
+            if b not in grid["matched"]:
+                grid["faces"][b] = ""
+        else:
+            keep.append(item)
+
+    lobby["pending_hides"] = keep
 
 
-def lobby_public_state(lobby: Lobby):
-    lobby.ensure_board()
+def public_lobby(lobby):
     return {
-        "code": lobby.code,
-        "mode": lobby.mode,
-        "size": lobby.size,
-        "status": lobby.status,
-        "seed": lobby.seed,
-        "started_ms": lobby.started_ms,
-        "ended_ms": lobby.ended_ms,
-        "max_players": MAX_PLAYERS,
-        "player_count": len(lobby.players),
-        "allow_join": lobby.allow_join,
-        "entry_mode": lobby.entry_mode,
-        "prizes": lobby.prizes,  # NEW
+        "code": lobby["code"],
+        "mode": lobby.get("mode", "solo"),
+        "entry_mode": lobby.get("entry_mode", "free"),
+        "rows": int(lobby.get("rows", lobby.get("size", 6))),
+        "cols": int(lobby.get("cols", lobby.get("size", 6))),
+        "status": lobby.get("status", "waiting"),
+        "allow_join": bool(lobby.get("allow_join", True)),
+        "player_count": int(lobby.get("player_count", 0)),
+        "prizes": lobby.get("prizes", {"1": "", "2": "", "3": ""}),
     }
 
 
-def leaderboard(lobby: Lobby):
-    total_pairs = lobby.total_pairs()
+def compute_leaderboard(lobby):
+    players = list(lobby.get("players", {}).values())
 
-    rows = []
-    for p in lobby.players.values():
-        finished = p.is_finished(total_pairs)
-        finish_time_ms = None
-        if p.finished_ms and lobby.started_ms:
-            finish_time_ms = max(0, p.finished_ms - lobby.started_ms)
+    # Sort by score desc, matches desc, misses asc
+    players_sorted = sorted(
+        players,
+        key=lambda p: (p.get("score", 0), p.get("matches", 0), -p.get("misses", 0)),
+        reverse=True
+    )
 
-        rows.append({
-            "player_id": p.player_id,
-            "name": p.name,
-            "team": p.team,
-            "score": p.score,
-            "matches": p.matches,
-            "misses": p.misses,
-            "flips": p.flips,
-            "finished": finished,
-            "finish_time_ms": finish_time_ms,
+    out_players = []
+    for p in players_sorted:
+        out_players.append({
+            "player_id": p.get("player_id"),
+            "name": p.get("name", ""),
+            "team": p.get("team", ""),
+            "score": p.get("score", 0),
+            "matches": p.get("matches", 0),
+            "misses": p.get("misses", 0),
         })
 
-    def sort_key(r):
-        finished_rank = 0 if r["finished"] else 1
-        finish_time = r["finish_time_ms"] if r["finish_time_ms"] is not None else 10**12
-        return (-r["score"], finished_rank, finish_time, r["misses"], r["flips"], r["name"].lower())
+    teams_out = []
+    if lobby.get("mode") == "teams":
+        team_map = {}
+        for p in out_players:
+            t = (p.get("team") or "").strip() or "Team"
+            team_map.setdefault(t, []).append(p)
 
-    rows.sort(key=sort_key)
-
-    team_rows = []
-    if lobby.mode == "teams":
-        by_team: Dict[str, List[dict]] = {}
-        for r in rows:
-            t = (r["team"] or "Team").strip() or "Team"
-            by_team.setdefault(t, []).append(r)
-
-        for t, members in by_team.items():
-            top3 = sorted(members, key=lambda r: (-r["score"], r["misses"], r["flips"]))[:3]
-            team_rows.append({
+        for t, members in team_map.items():
+            members_sorted = sorted(members, key=lambda x: x["score"], reverse=True)
+            top3 = members_sorted[:3]
+            score = sum(m["score"] for m in top3)
+            teams_out.append({
                 "team": t,
-                "score": sum(m["score"] for m in top3),
-                "members": [m["name"] for m in top3],
+                "score": score,
+                "members": [m["name"] for m in top3]
             })
 
-        team_rows.sort(key=lambda r: -r["score"])
+        teams_out.sort(key=lambda x: x["score"], reverse=True)
 
-    return {"players": rows, "teams": team_rows}
-
-
-def player_view_state(lobby: Lobby, player: PlayerState):
-    lobby.ensure_board()
-    total = lobby.size * lobby.size
-
-    t = now_ms()
-    expired = [idx for idx, until in player.revealed.items() if until <= t]
-    for idx in expired:
-        if idx not in player.matched:
-            player.revealed.pop(idx, None)
-
-    visible = [False] * total
-    for idx in player.matched:
-        if 0 <= idx < total:
-            visible[idx] = True
-    for idx in player.revealed.keys():
-        if 0 <= idx < total:
-            visible[idx] = True
-
-    faces = [lobby.board[i] if visible[i] else None for i in range(total)]
-
-    return {
-        "player": {
-            "player_id": player.player_id,
-            "name": player.name,
-            "team": player.team,
-            "score": player.score,
-            "matches": player.matches,
-            "misses": player.misses,
-            "flips": player.flips,
-            "finished": player.is_finished(lobby.total_pairs()),
-        },
-        "lobby": lobby_public_state(lobby),
-        "grid": {
-            "faces": faces,
-            "matched": sorted(list(player.matched)),
-        }
-    }
+    return {"players": out_players, "teams": teams_out}
 
 
-# -----------------------------
+# ----------------------------
 # Pages
-# -----------------------------
+# ----------------------------
 @app.route("/")
 def home():
     return render_template("home.html")
@@ -251,9 +196,6 @@ def home():
 
 @app.route("/host")
 def host_page():
-    key = request.args.get("host_key")
-    if key != HOST_KEY:
-        return redirect(url_for("home"))
     return render_template("host.html")
 
 
@@ -264,331 +206,343 @@ def join_page():
 
 @app.route("/play/<code>")
 def play_page(code):
-    code = code.strip().upper()
-    if code not in LOBBIES:
-        return redirect(url_for("join_page"))
+    # play.html should set window.MM_CODE = "{{ code }}"
     return render_template("play.html", code=code)
 
 
-# NEW: Spectator / view-only page
 @app.route("/watch/<code>")
 def watch_page(code):
-    code = code.strip().upper()
-    if code not in LOBBIES:
-        return redirect(url_for("home"))
-    return render_template("watch.html", code=code)
+    # Optional spectator page (if you have watch.html)
+    # If you don't, you can still use /api/lobby/<code> for a spectator overlay.
+    try:
+        return render_template("watch.html", code=code)
+    except Exception:
+        return redirect(f"/play/{code}")
 
 
-# -----------------------------
-# API (Host)
-# -----------------------------
+# ----------------------------
+# Host APIs
+# ----------------------------
 @app.route("/api/host/create_lobby", methods=["POST"])
-def api_create_lobby():
-    require_host(request)
-    data = request.get_json(force=True) or {}
+def host_create_lobby():
+    if not require_host(request):
+        return jsonify({"ok": False, "error": "Invalid host key."}), 403
 
-    mode = (data.get("mode") or "solo").strip().lower()
-    size = int(data.get("size") or 6)
-    entry_mode = (data.get("entry_mode") or "free").strip().lower()
+    data = request.get_json(silent=True) or {}
+    mode = data.get("mode", "solo")
+    entry_mode = data.get("entry_mode", "free")  # free | ticket
 
-    if mode not in ("solo", "teams"):
-        mode = "solo"
-    if size not in (4, 6):
-        size = 6
-    if entry_mode not in ("free", "ticket"):
-        entry_mode = "free"
+    # Accept rows/cols (new), or size (old)
+    if "rows" in data and "cols" in data:
+        rows = data.get("rows", 6)
+        cols = data.get("cols", 6)
+    else:
+        size = int(data.get("size", 6))
+        rows, cols = size, size
 
-    code = make_code()
+    rows, cols, err = normalize_board(rows, cols)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+
+    code = make_code(6)
     while code in LOBBIES:
-        code = make_code()
+        code = make_code(6)
 
-    lobby = Lobby(code=code, mode=mode, size=size, entry_mode=entry_mode)
-    lobby.ensure_board()
+    lobby = {
+        "code": code,
+        "mode": mode,
+        "entry_mode": entry_mode,
+
+        # New dims
+        "rows": rows,
+        "cols": cols,
+
+        # Back-compat field (not required but harmless)
+        "size": max(rows, cols),
+
+        "created_at": time.time(),
+        "status": "waiting",
+        "allow_join": True,
+
+        "players": {},
+        "player_count": 0,
+
+        "prizes": {"1": "", "2": "", "3": ""}
+    }
+
+    init_round(lobby)
     LOBBIES[code] = lobby
 
-    return jsonify({"ok": True, "lobby": lobby_public_state(lobby)})
+    return jsonify({"ok": True, "lobby": public_lobby(lobby)})
 
 
-@app.route("/api/host/generate_tickets/<code>", methods=["POST"])
-def api_generate_tickets(code):
-    require_host(request)
-    code = code.strip().upper()
+@app.route("/api/host/start_round/<code>", methods=["POST"])
+def host_start_round(code):
+    if not require_host(request):
+        return jsonify({"ok": False, "error": "Invalid host key."}), 403
+
     lobby = LOBBIES.get(code)
     if not lobby:
         return jsonify({"ok": False, "error": "Lobby not found"}), 404
 
-    data = request.get_json(force=True) or {}
-    count = int(data.get("count") or 10)
-    count = max(1, min(100, count))
-
-    new_codes = []
-    for _ in range(count):
-        t = make_ticket(10)
-        while t in lobby.tickets:
-            t = make_ticket(10)
-        lobby.tickets[t] = False
-        new_codes.append(t)
-
-    return jsonify({"ok": True, "tickets": new_codes, "total": len(lobby.tickets)})
+    lobby["status"] = "running"
+    lobby["allow_join"] = False
+    return jsonify({"ok": True})
 
 
-# NEW: Set prizes
+@app.route("/api/host/end_round/<code>", methods=["POST"])
+def host_end_round(code):
+    if not require_host(request):
+        return jsonify({"ok": False, "error": "Invalid host key."}), 403
+
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify({"ok": False, "error": "Lobby not found"}), 404
+
+    lobby["status"] = "ended"
+    lobby["allow_join"] = False
+    return jsonify({"ok": True})
+
+
+@app.route("/api/host/reset_lobby/<code>", methods=["POST"])
+def host_reset_lobby(code):
+    if not require_host(request):
+        return jsonify({"ok": False, "error": "Invalid host key."}), 403
+
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify({"ok": False, "error": "Lobby not found"}), 404
+
+    init_round(lobby)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/host/set_prizes/<code>", methods=["POST"])
-def api_set_prizes(code):
-    require_host(request)
-    code = code.strip().upper()
+def host_set_prizes(code):
+    if not require_host(request):
+        return jsonify({"ok": False, "error": "Invalid host key."}), 403
+
     lobby = LOBBIES.get(code)
     if not lobby:
         return jsonify({"ok": False, "error": "Lobby not found"}), 404
 
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     p1 = (data.get("p1") or "").strip()
     p2 = (data.get("p2") or "").strip()
     p3 = (data.get("p3") or "").strip()
 
-    prizes = {}
-    if p1: prizes["1"] = p1[:60]
-    if p2: prizes["2"] = p2[:60]
-    if p3: prizes["3"] = p3[:60]
-
-    lobby.prizes = prizes
-    return jsonify({"ok": True, "prizes": lobby.prizes})
+    lobby["prizes"] = {"1": p1, "2": p2, "3": p3}
+    return jsonify({"ok": True})
 
 
-# NEW: Kick player
 @app.route("/api/host/kick/<code>", methods=["POST"])
-def api_kick_player(code):
-    require_host(request)
-    code = code.strip().upper()
+def host_kick(code):
+    if not require_host(request):
+        return jsonify({"ok": False, "error": "Invalid host key."}), 403
+
     lobby = LOBBIES.get(code)
     if not lobby:
         return jsonify({"ok": False, "error": "Lobby not found"}), 404
 
-    data = request.get_json(force=True) or {}
-    pid = (data.get("player_id") or "").strip()
+    data = request.get_json(silent=True) or {}
+    pid = data.get("player_id")
+    if not pid:
+        return jsonify({"ok": False, "error": "Missing player_id"}), 400
 
-    if not pid or pid not in lobby.players:
-        return jsonify({"ok": False, "error": "Player not found"}), 404
+    if pid in lobby["players"]:
+        del lobby["players"][pid]
+        lobby["player_count"] = len(lobby["players"])
 
-    kicked_name = lobby.players[pid].name
-    del lobby.players[pid]
-
-    # If we were full, reopen joins (only if still waiting)
-    if lobby.status == "waiting" and len(lobby.players) < MAX_PLAYERS:
-        lobby.allow_join = True
-
-    return jsonify({"ok": True, "kicked": kicked_name, "player_count": len(lobby.players)})
+    return jsonify({"ok": True})
 
 
-@app.route("/api/host/start_round/<code>", methods=["POST"])
-def api_start_round(code):
-    require_host(request)
-    code = code.strip().upper()
-    lobby = LOBBIES.get(code)
-    if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
-
-    if lobby.status == "running":
-        return jsonify({"ok": True, "lobby": lobby_public_state(lobby)})
-
-    lobby.status = "running"
-    lobby.started_ms = now_ms()
-    lobby.ended_ms = None
-    lobby.allow_join = False
-    lobby.ensure_board()
-
-    for p in lobby.players.values():
-        p.score = 0
-        p.matches = 0
-        p.misses = 0
-        p.flips = 0
-        p.finished_ms = None
-        p.first_idx = None
-        p.second_idx = None
-        p.revealed.clear()
-        p.matched.clear()
-
-    return jsonify({"ok": True, "lobby": lobby_public_state(lobby)})
-
-
-@app.route("/api/host/end_round/<code>", methods=["POST"])
-def api_end_round(code):
-    require_host(request)
-    code = code.strip().upper()
-    lobby = LOBBIES.get(code)
-    if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
-
-    lobby.status = "ended"
-    lobby.ended_ms = now_ms()
-    return jsonify({"ok": True, "lobby": lobby_public_state(lobby), "leaderboard": leaderboard(lobby)})
-
-
-@app.route("/api/host/reset_lobby/<code>", methods=["POST"])
-def api_reset_lobby(code):
-    require_host(request)
-    code = code.strip().upper()
-    lobby = LOBBIES.get(code)
-    if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
-
-    lobby.status = "waiting"
-    lobby.allow_join = True
-    lobby.seed = random.randint(1, 2_000_000_000)
-    lobby.board = generate_board(lobby.seed, lobby.size)
-    lobby.started_ms = None
-    lobby.ended_ms = None
-
-    for p in lobby.players.values():
-        p.score = 0
-        p.matches = 0
-        p.misses = 0
-        p.flips = 0
-        p.finished_ms = None
-        p.first_idx = None
-        p.second_idx = None
-        p.revealed.clear()
-        p.matched.clear()
-
-    return jsonify({"ok": True, "lobby": lobby_public_state(lobby)})
-
-
-# -----------------------------
-# API (Public)
-# -----------------------------
-@app.route("/api/lobby/<code>", methods=["GET"])
-def api_get_lobby(code):
-    code = code.strip().upper()
-    lobby = LOBBIES.get(code)
-    if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
-    return jsonify({"ok": True, "lobby": lobby_public_state(lobby), "leaderboard": leaderboard(lobby)})
-
-
+# ----------------------------
+# Player / Spectator APIs
+# ----------------------------
 @app.route("/api/join", methods=["POST"])
 def api_join():
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     code = (data.get("code") or "").strip().upper()
-    name = clean_name(data.get("name") or "")
-    team = clean_team(data.get("team") or "")
-    ticket = (data.get("ticket") or "").strip().upper()
+    name = (data.get("name") or "").strip()[:24]
+    team = (data.get("team") or "").strip()[:24]
 
     lobby = LOBBIES.get(code)
     if not lobby:
         return jsonify({"ok": False, "error": "Lobby not found"}), 404
 
-    if not lobby.allow_join or lobby.status != "waiting":
-        return jsonify({"ok": False, "error": "Lobby already started"}), 400
+    # lock join once started (you asked for this)
+    if not lobby.get("allow_join", True):
+        return jsonify({"ok": False, "error": "Joining is locked for this round."}), 403
 
-    if len(lobby.players) >= MAX_PLAYERS:
-        lobby.allow_join = False
-        return jsonify({"ok": False, "error": "Lobby is full (10 max)"}), 400
+    if lobby.get("player_count", 0) >= 10:
+        return jsonify({"ok": False, "error": "Lobby is full (10 max)."}), 403
 
-    if lobby.mode != "teams":
-        team = ""
+    if not name:
+        return jsonify({"ok": False, "error": "Name required."}), 400
 
-    if lobby.entry_mode == "ticket":
-        if not ticket:
-            return jsonify({"ok": False, "error": "Ticket code required"}), 400
-        if ticket not in lobby.tickets:
-            return jsonify({"ok": False, "error": "Invalid ticket code"}), 400
-        if lobby.tickets[ticket] is True:
-            return jsonify({"ok": False, "error": "Ticket already used"}), 400
-        lobby.tickets[ticket] = True
+    # Create player
+    pid = make_player_id()
+    while pid in lobby["players"]:
+        pid = make_player_id()
 
-    player_id = "pl_" + uuid.uuid4().hex[:10]
-    lobby.players[player_id] = PlayerState(player_id=player_id, name=name, team=team)
+    lobby["players"][pid] = {
+        "player_id": pid,
+        "name": name,
+        "team": team,
+        "score": 0,
+        "matches": 0,
+        "misses": 0,
+        "finished": False,
+        "revealed": []
+    }
+    lobby["player_count"] = len(lobby["players"])
 
-    if len(lobby.players) >= MAX_PLAYERS:
-        lobby.allow_join = False
-
-    return jsonify({"ok": True, "player_id": player_id, "play_url": url_for("play_page", code=code)})
+    return jsonify({"ok": True, "player_id": pid, "lobby": public_lobby(lobby)})
 
 
-@app.route("/api/state/<code>/<player_id>", methods=["GET"])
-def api_player_state(code, player_id):
-    code = code.strip().upper()
+@app.route("/api/lobby/<code>")
+def api_lobby(code):
+    code = (code or "").strip().upper()
     lobby = LOBBIES.get(code)
     if not lobby:
         return jsonify({"ok": False, "error": "Lobby not found"}), 404
 
-    player = lobby.players.get(player_id)
+    apply_pending_hides(lobby)
+    lb = compute_leaderboard(lobby)
+    return jsonify({"ok": True, "lobby": public_lobby(lobby), "leaderboard": lb})
+
+
+@app.route("/api/state/<code>/<player_id>")
+def api_state(code, player_id):
+    code = (code or "").strip().upper()
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify({"ok": False, "error": "Lobby not found"}), 404
+
+    player = lobby.get("players", {}).get(player_id)
     if not player:
         return jsonify({"ok": False, "error": "Player not found"}), 404
 
-    return jsonify({"ok": True, "state": player_view_state(lobby, player), "leaderboard": leaderboard(lobby)})
+    apply_pending_hides(lobby)
+
+    state = {
+        "lobby": public_lobby(lobby),
+        "grid": {
+            "faces": lobby["grid"]["faces"],
+            "matched": lobby["grid"]["matched"]
+        },
+        "player": {
+            "player_id": player_id,
+            "name": player.get("name", ""),
+            "team": player.get("team", ""),
+            "score": player.get("score", 0),
+            "matches": player.get("matches", 0),
+            "misses": player.get("misses", 0),
+            "finished": player.get("finished", False),
+        }
+    }
+
+    lb = compute_leaderboard(lobby)
+    return jsonify({"ok": True, "state": state, "leaderboard": lb})
 
 
 @app.route("/api/flip", methods=["POST"])
 def api_flip():
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     code = (data.get("code") or "").strip().upper()
-    player_id = (data.get("player_id") or "").strip()
-    idx = int(data.get("idx"))
+    player_id = data.get("player_id")
+    idx = data.get("idx")
 
     lobby = LOBBIES.get(code)
     if not lobby:
         return jsonify({"ok": False, "error": "Lobby not found"}), 404
-    player = lobby.players.get(player_id)
+
+    apply_pending_hides(lobby)
+
+    if lobby.get("status") != "running":
+        return jsonify({"ok": False, "error": "Round not running"}), 400
+
+    player = lobby.get("players", {}).get(player_id)
     if not player:
         return jsonify({"ok": False, "error": "Player not found"}), 404
 
-    lobby.ensure_board()
+    rows = int(lobby.get("rows", lobby.get("size", 6)))
+    cols = int(lobby.get("cols", lobby.get("size", 6)))
+    tiles = rows * cols
 
-    if lobby.status != "running":
-        return jsonify({"ok": False, "error": "Round not running"}), 400
-
-    total = lobby.size * lobby.size
-    if idx < 0 or idx >= total:
+    try:
+        idx = int(idx)
+    except Exception:
         return jsonify({"ok": False, "error": "Bad index"}), 400
 
-    if idx in player.matched:
-        return jsonify({"ok": True, "state": player_view_state(lobby, player)})
+    if idx < 0 or idx >= tiles:
+        return jsonify({"ok": False, "error": "Index out of range"}), 400
 
-    if player.first_idx is not None and player.second_idx is not None:
-        return jsonify({"ok": True, "state": player_view_state(lobby, player)})
+    grid = lobby["grid"]
 
-    if idx in player.revealed and idx not in player.matched:
-        return jsonify({"ok": True, "state": player_view_state(lobby, player)})
+    if idx in grid["matched"]:
+        return jsonify({"ok": True})  # already matched
 
-    player.flips += 1
-    player.revealed[idx] = now_ms() + 900
+    # If already face-up right now, ignore
+    if grid["faces"][idx]:
+        return jsonify({"ok": True})
 
-    if player.first_idx is None:
-        player.first_idx = idx
-        return jsonify({"ok": True, "state": player_view_state(lobby, player)})
+    # Reveal it
+    grid["faces"][idx] = grid["solution"][idx]
+    player.setdefault("revealed", [])
+    player["revealed"].append(idx)
 
-    player.second_idx = idx
-    a = player.first_idx
-    b = player.second_idx
+    # Only evaluate after 2 picks
+    if len(player["revealed"]) == 2:
+        a, b = player["revealed"][0], player["revealed"][1]
+        fa, fb = grid["solution"][a], grid["solution"][b]
 
-    if lobby.board[a] == lobby.board[b] and a != b:
-        player.matched.add(a)
-        player.matched.add(b)
-        player.matches += 1
-        player.score += PAIR_SCORE
+        if a != b and fa == fb:
+            # MATCH
+            if a not in grid["matched"]:
+                grid["matched"].append(a)
+            if b not in grid["matched"]:
+                grid["matched"].append(b)
 
-        player.revealed.pop(a, None)
-        player.revealed.pop(b, None)
-    else:
-        player.misses += 1
-        player.score -= MISS_PENALTY
-        player.revealed[a] = now_ms() + 800
-        player.revealed[b] = now_ms() + 800
+            player["matches"] = player.get("matches", 0) + 1
+            player["score"] = player.get("score", 0) + 10
+        else:
+            # MISS
+            player["misses"] = player.get("misses", 0) + 1
+            player["score"] = player.get("score", 0) - 1
 
-    player.first_idx = None
-    player.second_idx = None
+            # Keep them visible briefly, then hide (prevents instant-flash)
+            lobby.setdefault("pending_hides", []).append({
+                "a": a,
+                "b": b,
+                "hide_at": time.time() + 0.9
+            })
 
-    if player.is_finished(lobby.total_pairs()) and player.finished_ms is None:
-        player.finished_ms = now_ms()
+        player["revealed"] = []
 
-    return jsonify({"ok": True, "state": player_view_state(lobby, player)})
+        # Finished for this player?
+        if len(grid["matched"]) >= tiles:
+            player["finished"] = True
+
+    # Return immediate updated state for smooth UI
+    state = {
+        "lobby": public_lobby(lobby),
+        "grid": {"faces": grid["faces"], "matched": grid["matched"]},
+        "player": {
+            "player_id": player_id,
+            "name": player.get("name", ""),
+            "team": player.get("team", ""),
+            "score": player.get("score", 0),
+            "matches": player.get("matches", 0),
+            "misses": player.get("misses", 0),
+            "finished": player.get("finished", False),
+        }
+    }
+    return jsonify({"ok": True, "state": state})
 
 
-@app.route("/health")
-def health():
-    return "ok", 200
-
-
+# ----------------------------
+# Run locally
+# ----------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "5000")), debug=True)
+    app.run(debug=True)
