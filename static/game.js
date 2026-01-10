@@ -6,12 +6,11 @@ const playerKey = "mm_player_id_" + code;
 let playerId = localStorage.getItem(playerKey);
 
 if(!playerId){
-  // If they went directly to /play without joining, send them to join
   window.location.href = "/join";
 }
 
 // ------------------------------
-// Input lock + polling pause (FIX for "first card won't stay lit")
+// Input lock + polling pause (keeps first card lit)
 // ------------------------------
 let lockInput = false;
 let pauseUntil = 0;
@@ -33,15 +32,13 @@ let soundOn = (localStorage.getItem(soundKey) ?? "1") === "1";
 let soundVol = parseFloat(localStorage.getItem(volKey) ?? "0.6");
 if(Number.isNaN(soundVol)) soundVol = 0.6;
 
-// If your HTML has these, they’ll work. If not, no problem.
 function syncSoundUI(){
   const cb = $("soundToggle");
   const vol = $("volume");
   const volLabel = $("volLabel");
-
   if(cb) cb.checked = soundOn;
   if(vol) vol.value = String(Math.round(soundVol * 100));
-  if(volLabel) volLabel.textContent = Math.round(soundVol * 100);
+  if(volLabel) volLabel.textContent = String(Math.round(soundVol * 100));
 }
 
 function setSound(on){
@@ -56,7 +53,6 @@ function setVolume(v){
   syncSoundUI();
 }
 
-// tiny beep using WebAudio (works on most browsers after interaction)
 let audioCtx = null;
 function ensureAudio(){
   if(!audioCtx){
@@ -93,19 +89,14 @@ function beep(type){
   }
 }
 
-// Wire sound controls if they exist
 document.addEventListener("DOMContentLoaded", () => {
   const cb = $("soundToggle");
   const vol = $("volume");
-  if(cb){
-    cb.addEventListener("change", () => setSound(cb.checked));
-  }
-  if(vol){
-    vol.addEventListener("input", () => {
-      const v = parseInt(vol.value, 10);
-      setVolume((Number.isFinite(v) ? v : 60) / 100);
-    });
-  }
+  if(cb) cb.addEventListener("change", () => setSound(cb.checked));
+  if(vol) vol.addEventListener("input", () => {
+    const v = parseInt(vol.value, 10);
+    setVolume((Number.isFinite(v) ? v : 60) / 100);
+  });
   syncSoundUI();
 });
 
@@ -120,29 +111,36 @@ function escapeHtml(s){
     .replaceAll('"',"&quot;");
 }
 
-function computeColumns(size){
-  const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-  const w = window.innerWidth;
+// Compute an ergonomic tile size that tries to fit the whole board
+function computeTileSize(gridEl, rows, cols){
+  // We already set gridTemplateColumns before calling this.
+  const gap = parseFloat(getComputedStyle(gridEl).gap || "10") || 10;
 
-  // 4x4 should always be 4 columns
-  if(size === 4) return 4;
+  // Width-limited tile size
+  const gridWidth = gridEl.clientWidth;
+  const tileW = Math.floor((gridWidth - gap * (cols - 1)) / cols);
 
-  // 6x6:
-  // - landscape / wider screens: 6 columns
-  if(isLandscape || w >= 700) return 6;
+  // Height-limited tile size: available space from grid top to bottom of viewport
+  const rect = gridEl.getBoundingClientRect();
+  const bottomPadding = 18; // breathing room
+  const availH = Math.max(160, Math.floor(window.innerHeight - rect.top - bottomPadding));
+  const tileH_by_height = Math.floor((availH - gap * (rows - 1)) / rows);
 
-  // - portrait phones: use 6 columns if the phone isn't tiny, otherwise 5
-  //   (prevents 9 tall rows + scrolling)
-  if(w >= 380) return 6;
-  return 5;
+  // Choose the smaller so we fit both dimensions
+  let tile = Math.min(tileW, tileH_by_height);
+
+  // Clamp so it stays tappable
+  const minTap = isMobile() ? 42 : 50;
+  const maxTap = 96;
+  tile = Math.max(minTap, Math.min(maxTap, tile));
+
+  return tile;
 }
 
-
 // ------------------------------
-// Confetti (lightweight particles)
+// Confetti (particles)
 // ------------------------------
 let didConfetti = false;
-
 function confettiBurst(){
   const host = document.body;
   if(!host) return;
@@ -181,38 +179,32 @@ function shakeGrid(){
 // ------------------------------
 function renderGrid(state){
   const lobby = state.lobby;
-  const size = lobby.size;
+
+  // ✅ Use exact host-chosen dimensions
+  const rows = parseInt(lobby.rows, 10);
+  const cols = parseInt(lobby.cols, 10);
+
   const faces = state.grid.faces;
   const matched = new Set(state.grid.matched || []);
 
-  const cols = computeColumns(size);
   const grid = $("grid");
   if(!grid) return;
 
+  // Set columns exactly (no guessing)
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
 
-  // Determine tile height based on screen
-let h = 78;
-
-// 6x6 needs to be more compact on phones
-if(size === 6){
-  if(cols === 6) h = 56;
-  if(cols === 5) h = 60;
-
-  if(window.innerHeight < 740) h -= 6;
-  if(window.innerHeight < 680) h -= 6;
-}
-
-if(window.innerWidth < 380) h = Math.max(44, h - 6);
-
+  // Compute tile size to fit available viewport
+  const tileSize = computeTileSize(grid, rows, cols);
 
   grid.innerHTML = "";
 
   faces.forEach((face, idx) => {
     const tile = document.createElement("button");
     tile.className = "tile";
-    tile.style.height = h + "px";
     tile.dataset.idx = String(idx);
+
+    // Make tiles square-ish but allow vertical fit
+    tile.style.height = tileSize + "px";
 
     if(matched.has(idx)){
       tile.classList.add("matched");
@@ -228,21 +220,17 @@ if(window.innerWidth < 380) h = Math.max(44, h - 6);
 
     tile.onclick = async () => {
       if(lockInput) return;
-
-      // only allow flips when running
       if(lobby.status !== "running") return;
-
-      // already revealed currently
-      if(face) return;
+      if(face) return; // already revealed
 
       lockInput = true;
 
-      // ✅ KEY FIX: prevent polling redraw from "un-revealing" the first pick
+      // ✅ protect UI from poll redraw mid-turn
       pausePolling(isMobile() ? 2600 : 1600);
 
       await flip(idx);
 
-      // keep UI stable for feedback (match/miss)
+      // feedback window
       pausePolling(isMobile() ? 1400 : 900);
 
       setTimeout(() => { lockInput = false; }, 220);
@@ -252,7 +240,9 @@ if(window.innerWidth < 380) h = Math.max(44, h - 6);
   });
 
   // Header stats
-  if($("status"))  $("status").textContent  = `Status: ${lobby.status} • Players: ${lobby.player_count}/10 • Board: ${size}x${size}`;
+  if($("status")){
+    $("status").textContent = `Status: ${lobby.status} • Players: ${lobby.player_count}/10 • Board: ${cols}x${rows}`;
+  }
   if($("score"))   $("score").textContent   = state.player.score;
   if($("matches")) $("matches").textContent = state.player.matches;
   if($("misses"))  $("misses").textContent  = state.player.misses;
@@ -269,10 +259,11 @@ if(window.innerWidth < 380) h = Math.max(44, h - 6);
     }
   }
 
-  // ---- Match/Miss FX (detect changes) ----
+  // ---- Match/Miss FX ----
   const curMisses = state.player.misses;
   const currentMatched = new Set(state.grid.matched || []);
 
+  // newly matched tiles
   const newlyMatched = [];
   currentMatched.forEach(i => {
     if(!prevMatchedSet.has(i)) newlyMatched.push(i);
@@ -340,10 +331,9 @@ function renderLeaderboard(lb, mode){
 // Networking
 // ------------------------------
 async function getState(){
-  // ✅ critical: don't overwrite UI while mid-turn
   if(Date.now() < pauseUntil) return;
 
-  try {
+  try{
     const res = await fetch(`/api/state/${code}/${playerId}`);
     const out = await res.json();
 
@@ -359,8 +349,8 @@ async function getState(){
 
     renderGrid(out.state);
     renderLeaderboard(out.leaderboard, out.state.lobby.mode);
-  } catch (e) {
-    // Keep warmup visible while server wakes up
+  }catch(e){
+    // Keep warmup visible while waking
   }
 }
 
@@ -374,7 +364,6 @@ async function flip(idx){
     const out = await res.json();
 
     if(out.ok && out.state){
-      // render immediately from flip response
       renderGrid(out.state);
 
       // ✅ Optional upgrade: longer protected window on mobile
@@ -386,11 +375,12 @@ async function flip(idx){
 }
 
 window.addEventListener("resize", () => {
+  // Re-render quickly on orientation change
   getState();
 });
 
-// Kick things off
+// Start
 getState();
 
-// Poll server state (slower on mobile = less mid-turn overwrite)
+// Poll server state (slower on mobile = less chance of mid-turn overwrite)
 setInterval(getState, isMobile() ? 1100 : 750);
