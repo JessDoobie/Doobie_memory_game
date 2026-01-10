@@ -25,11 +25,15 @@
         </select>
       </div>
 
+      <!-- ✅ NEW: Board preset dropdown -->
       <div class="row">
-        <label>Board Size</label>
-        <select id="size">
-          <option value="4">4x4 (quick)</option>
-          <option value="6" selected>6x6 (standard)</option>
+        <label>Board</label>
+        <select id="board">
+          <option value="4x4">4×4 (16)</option>
+          <option value="5x4">5×4 (20)</option>
+          <option value="6x4">6×4 (24)</option>
+          <option value="6x5">6×5 (30)</option>
+          <option value="6x6" selected>6×6 (36)</option>
         </select>
       </div>
 
@@ -62,7 +66,7 @@
         <button class="btn outline" id="copyWatchBtn" type="button">Copy</button>
       </div>
 
-      <!-- ✅ HOST CONTROLS (these are what you’re missing) -->
+      <!-- ✅ HOST CONTROLS -->
       <div class="grid2" style="margin-top:14px;">
         <button class="btn" id="startBtn" type="button">Start Round</button>
         <button class="btn outline" id="endBtn" type="button">End Round</button>
@@ -283,10 +287,14 @@ el("createBtn").onclick = async ()=>{
   el("errBox").style.display = "none";
   try{
     const mode = el("mode").value;
-    const size = parseInt(el("size").value, 10);
     const entry_mode = el("entryMode").value;
 
-    const out = await hostPost("/api/host/create_lobby", {mode, size, entry_mode});
+    // ✅ NEW: board -> rows/cols
+    const board = el("board").value; // like "6x5"
+    const [cols, rows] = board.split("x").map(n => parseInt(n, 10));
+
+    // ✅ IMPORTANT: this requires app.py to accept rows/cols (next step)
+    const out = await hostPost("/api/host/create_lobby", { mode, rows, cols, entry_mode });
     if(!out.ok) throw new Error(out.error || "Create lobby failed");
 
     lobbyCode = out.lobby.code;
