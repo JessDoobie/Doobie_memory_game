@@ -347,6 +347,8 @@ input::placeholder{
   pointer-events: none;
   z-index: 40;
 }
+
+/* Mobile emoji sizing */
 @media (max-width: 520px){
   .tile{
     font-size: clamp(24px, 6vw, 34px);
