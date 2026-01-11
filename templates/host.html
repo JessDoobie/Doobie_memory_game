@@ -8,167 +8,124 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>🎛️ Host Dashboard</h1>
-    <p class="muted">Create a lobby, then share the code with your chat.</p>
 
+    <div class="topbar">
+      <h1>🎲 Host Dashboard</h1>
+    </div>
+
+    <!-- CREATE LOBBY -->
     <div class="card">
+      <p class="muted">Create a lobby, then share the code with your chat.</p>
+
       <div class="row">
-        <label>Mode</label>
+        <label for="mode">Mode</label>
         <select id="mode">
           <option value="solo" selected>Solo</option>
-          <option value="teams">Teams</option>
         </select>
       </div>
 
       <div class="row">
-        <label>Board</label>
-        <select id="preset">
-          <option value="quick">Quick (4×4 • 16 cards)</option>
+        <label for="board">Board</label>
+        <select id="board">
           <option value="standard" selected>Standard (4×5 • 20 cards)</option>
           <option value="extended">Extended (4×6 • 24 cards)</option>
         </select>
       </div>
 
       <div class="row">
-        <label>Entry</label>
+        <label for="entry">Entry</label>
         <select id="entry">
           <option value="free" selected>Free</option>
-          <option value="paid">Paid (ticket code)</option>
         </select>
       </div>
 
-      <button class="btn" id="createBtn">Create Lobby</button>
-      <p class="tiny muted" id="createMsg" style="margin-top:10px;"></p>
+      <button id="createBtn" class="btn">Create Lobby</button>
+
+      <div id="createStatus" class="tiny muted" style="margin-top:8px;"></div>
     </div>
 
-    <div class="card" id="lobbyBox" style="display:none;">
+    <!-- LOBBY INFO -->
+    <div id="lobbyBox" class="card" style="display:none;">
       <h3>Lobby</h3>
-      <div class="hr"></div>
 
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <span class="pill">Code: <span id="codeText"></span></span>
-        <button class="btn outline" id="copyCodeBtn">Copy Code</button>
-      </div>
+      <div class="pill" id="codePill">Code: ----</div>
 
       <div class="hr"></div>
 
-      <div class="grid2">
-        <div class="card inner">
-          <div class="tiny muted">Join page</div>
-          <div id="joinLink" style="word-break:break-all;"></div>
-          <button class="btn outline" id="copyJoinBtn" style="margin-top:8px;">Copy</button>
-        </div>
+      <p class="tiny muted">
+        Join page:<br>
+        <strong id="joinLink"></strong>
+      </p>
 
-        <div class="card inner">
-          <div class="tiny muted">Direct play link</div>
-          <div id="playLink" style="word-break:break-all;"></div>
-          <button class="btn outline" id="copyPlayBtn" style="margin-top:8px;">Copy</button>
-        </div>
+      <p class="tiny muted">
+        Direct play link:<br>
+        <strong id="playLink"></strong>
+      </p>
 
-        <div class="card inner">
-          <div class="tiny muted">Spectator link (view-only)</div>
-          <div id="watchLink" style="word-break:break-all;"></div>
-          <button class="btn outline" id="copyWatchBtn" style="margin-top:8px;">Copy</button>
-        </div>
+      <button id="startBtn" class="btn">Start Game</button>
 
-        <div class="card inner">
-          <div class="tiny muted">Chat Blurb</div>
-          <textarea id="chatBlurb" rows="7" readonly></textarea>
-          <button class="btn outline" id="copyBlurbBtn" style="margin-top:8px;">📋 Copy Chat Blurb</button>
-        </div>
-      </div>
-
-      <div class="hr"></div>
-
-      <button class="btn" id="startBtn">Start Game</button>
-      <p class="tiny muted" id="startMsg" style="margin-top:10px;"></p>
+      <p class="tiny muted" style="margin-top:6px;">
+        Players will see “waiting” until you start.
+      </p>
     </div>
+
   </div>
 
-<script>
-  const $ = (id)=>document.getElementById(id);
+  <script>
+    const createBtn = document.getElementById("createBtn");
+    const startBtn  = document.getElementById("startBtn");
+    const statusEl  = document.getElementById("createStatus");
+    const lobbyBox  = document.getElementById("lobbyBox");
+    const codePill  = document.getElementById("codePill");
+    const joinLink  = document.getElementById("joinLink");
+    const playLink  = document.getElementById("playLink");
 
-  function copyText(txt){
-    navigator.clipboard.writeText(txt).catch(()=>{});
-  }
+    let currentCode = null;
 
-  let lastCode = null;
+    createBtn.onclick = async () => {
+      statusEl.textContent = "Creating lobby…";
 
-  $("createBtn").onclick = async () => {
-    $("createMsg").textContent = "Creating…";
-    $("lobbyBox").style.display = "none";
-    lastCode = null;
-
-    try{
-      const res = await fetch("/api/create_lobby", {
+      const res = await fetch("/api/create", {
         method: "POST",
-        headers: {"Content-Type":"application/json"},
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mode: $("mode").value,
-          preset: $("preset").value,
-          entry: $("entry").value
+          mode: document.getElementById("mode").value,
+          board: document.getElementById("board").value,
+          entry: document.getElementById("entry").value
         })
       });
-      const out = await res.json();
-      if(!out.ok){
-        $("createMsg").textContent = out.error || "Could not create lobby.";
+
+      const data = await res.json();
+
+      if (!data.ok) {
+        statusEl.textContent = data.error || "Failed to create lobby.";
         return;
       }
 
-      lastCode = out.code;
-      $("createMsg").textContent = "Lobby created ✅";
-      $("lobbyBox").style.display = "block";
+      currentCode = data.code;
 
-      const base = window.location.origin;
-      const code = out.code;
+      statusEl.textContent = "Lobby created ✓";
+      lobbyBox.style.display = "block";
 
-      const joinUrl = base + "/join";
-      const playUrl = base + "/play/" + code;
-      const watchUrl = base + "/watch/" + code;
+      codePill.textContent = "Code: " + currentCode;
+      joinLink.textContent = location.origin + "/join";
+      playLink.textContent = location.origin + "/play/" + currentCode;
+    };
 
-      $("codeText").textContent = code;
-      $("joinLink").textContent = joinUrl;
-      $("playLink").textContent = playUrl;
-      $("watchLink").textContent = watchUrl;
+    startBtn.onclick = async () => {
+      if (!currentCode) return;
 
-      const presetLabel = out.preset_label || "Standard";
-      const dims = out.rows + "×" + out.cols;
-      const cards = out.total + " cards";
+      startBtn.disabled = true;
+      startBtn.textContent = "Starting…";
 
-      $("chatBlurb").value =
-`🃏 Memory Match is LIVE!
-Go to: ${joinUrl}
-Click Join a Game
-Enter CODE: ${code}
-📌 Board: ${presetLabel} (${dims} • ${cards})
-👀 Spectate: ${watchUrl}`;
-
-    }catch(e){
-      $("createMsg").textContent = "Error creating lobby.";
-    }
-  };
-
-  $("startBtn").onclick = async () => {
-    if(!lastCode) return;
-    $("startMsg").textContent = "Starting…";
-    try{
-      const res = await fetch("/api/start", {
+      await fetch("/api/start", {
         method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ code: lastCode })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: currentCode })
       });
-      const out = await res.json();
-      $("startMsg").textContent = out.ok ? "Game started ✅ (joining locked)" : (out.error || "Could not start.");
-    }catch(e){
-      $("startMsg").textContent = "Error starting.";
-    }
-  };
 
-  $("copyCodeBtn").onclick = ()=> lastCode && copyText(lastCode);
-  $("copyJoinBtn").onclick = ()=> copyText($("joinLink").textContent);
-  $("copyPlayBtn").onclick = ()=> copyText($("playLink").textContent);
-  $("copyWatchBtn").onclick = ()=> copyText($("watchLink").textContent);
-  $("copyBlurbBtn").onclick = ()=> copyText($("chatBlurb").value);
-</script>
+      startBtn.textContent = "Game Started";
+    };
+  </script>
 </body>
 </html>
