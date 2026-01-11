@@ -1,4 +1,3 @@
-// static/game.js
 function $(id){ return document.getElementById(id); }
 
 const code = window.MM_CODE;
@@ -9,100 +8,8 @@ if(!playerId){
   window.location.href = "/join";
 }
 
-// ------------------------------
-// Input lock + polling pause (keeps first card lit)
-// ------------------------------
 let lockInput = false;
-let pauseUntil = 0;
 
-function pausePolling(ms){
-  pauseUntil = Math.max(pauseUntil, Date.now() + ms);
-}
-
-function isMobile(){
-  return window.innerWidth < 520 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
-
-// ------------------------------
-// Sound (per player, stored locally)
-// ------------------------------
-const soundKey = `mm_sound_on_${code}`;
-const volKey   = `mm_sound_vol_${code}`;
-let soundOn = (localStorage.getItem(soundKey) ?? "1") === "1";
-let soundVol = parseFloat(localStorage.getItem(volKey) ?? "0.6");
-if(Number.isNaN(soundVol)) soundVol = 0.6;
-
-function syncSoundUI(){
-  const cb = $("soundToggle");
-  const vol = $("volume");
-  const volLabel = $("volLabel");
-  if(cb) cb.checked = soundOn;
-  if(vol) vol.value = String(Math.round(soundVol * 100));
-  if(volLabel) volLabel.textContent = String(Math.round(soundVol * 100));
-}
-
-function setSound(on){
-  soundOn = !!on;
-  localStorage.setItem(soundKey, soundOn ? "1" : "0");
-  syncSoundUI();
-}
-
-function setVolume(v){
-  soundVol = Math.max(0, Math.min(1, v));
-  localStorage.setItem(volKey, String(soundVol));
-  syncSoundUI();
-}
-
-let audioCtx = null;
-function ensureAudio(){
-  if(!audioCtx){
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-}
-
-function beep(type){
-  if(!soundOn) return;
-  try{
-    ensureAudio();
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-
-    let freq = 660;
-    let dur = 0.08;
-    if(type === "match"){ freq = 880; dur = 0.09; }
-    if(type === "miss"){ freq = 220; dur = 0.10; }
-    if(type === "win"){ freq = 990; dur = 0.12; }
-
-    o.type = "sine";
-    o.frequency.value = freq;
-
-    g.gain.value = 0.0001;
-    g.gain.exponentialRampToValueAtTime(Math.max(0.0001, soundVol), audioCtx.currentTime + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
-
-    o.connect(g);
-    g.connect(audioCtx.destination);
-    o.start();
-    o.stop(audioCtx.currentTime + dur + 0.02);
-  }catch(e){
-    // ignore
-  }
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  const cb = $("soundToggle");
-  const vol = $("volume");
-  if(cb) cb.addEventListener("change", () => setSound(cb.checked));
-  if(vol) vol.addEventListener("input", () => {
-    const v = parseInt(vol.value, 10);
-    setVolume((Number.isFinite(v) ? v : 60) / 100);
-  });
-  syncSoundUI();
-});
-
-// ------------------------------
-// Helpers
-// ------------------------------
 function escapeHtml(s){
   return (s||"")
     .replaceAll("&","&amp;")
@@ -111,232 +18,86 @@ function escapeHtml(s){
     .replaceAll('"',"&quot;");
 }
 
-// Compute an ergonomic tile size that tries to fit the whole board
-function computeTileSize(gridEl, rows, cols){
-  // We already set gridTemplateColumns before calling this.
-  const gap = parseFloat(getComputedStyle(gridEl).gap || "10") || 10;
-
-  // Width-limited tile size
-  const gridWidth = gridEl.clientWidth;
-  const tileW = Math.floor((gridWidth - gap * (cols - 1)) / cols);
-
-  // Height-limited tile size: available space from grid top to bottom of viewport
-  const rect = gridEl.getBoundingClientRect();
-  const bottomPadding = 18; // breathing room
-  const availH = Math.max(160, Math.floor(window.innerHeight - rect.top - bottomPadding));
-  const tileH_by_height = Math.floor((availH - gap * (rows - 1)) / rows);
-
-  // Choose the smaller so we fit both dimensions
-  let tile = Math.min(tileW, tileH_by_height);
-
-  // Clamp so it stays tappable
-  const minTap = isMobile() ? 42 : 50;
-  const maxTap = 96;
-  tile = Math.max(minTap, Math.min(maxTap, tile));
-
-  return tile;
-}
-
-// ------------------------------
-// Confetti (particles)
-// ------------------------------
-let didConfetti = false;
-function confettiBurst(){
-  const host = document.body;
-  if(!host) return;
-
-  const count = 70;
-  for(let i=0; i<count; i++){
-    const p = document.createElement("div");
-    p.className = "confetti";
-    p.style.left = (Math.random()*100) + "vw";
-    p.style.top = "-10px";
-    p.style.transform = `rotate(${Math.random()*360}deg)`;
-    p.style.opacity = "0.95";
-    p.style.animationDuration = (1.4 + Math.random()*1.2) + "s";
-    p.style.animationDelay = (Math.random()*0.12) + "s";
-    host.appendChild(p);
-    setTimeout(()=>p.remove(), 3000);
-  }
-}
-
-// ------------------------------
-// Match/Miss FX tracking
-// ------------------------------
-let prevMisses = null;
-let prevMatchedSet = new Set();
-let prevFinished = false;
-
-function shakeGrid(){
-  const g = $("grid");
-  if(!g) return;
-  g.classList.add("shake");
-  setTimeout(()=>g.classList.remove("shake"), 260);
-}
-
-// ------------------------------
-// Rendering
-// ------------------------------
 function renderGrid(state){
   const lobby = state.lobby;
-
-  // ✅ Use exact host-chosen dimensions
-  const rows = parseInt(lobby.rows, 10);
-  const cols = parseInt(lobby.cols, 10);
-
-  const faces = state.grid.faces;
-  const matched = new Set(state.grid.matched || []);
-
   const grid = $("grid");
-  if(!grid) return;
-
-  // Set columns exactly (no guessing)
-  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-
-  // Compute tile size to fit available viewport
-  const tileSize = computeTileSize(grid, rows, cols);
-
   grid.innerHTML = "";
 
-  faces.forEach((face, idx) => {
+  grid.style.gridTemplateColumns = `repeat(${lobby.cols}, 1fr)`;
+
+  state.player.faces.forEach((face, idx) => {
     const tile = document.createElement("button");
     tile.className = "tile";
-    tile.dataset.idx = String(idx);
+    tile.style.height = "70px";
 
-    // Make tiles square-ish but allow vertical fit
-    tile.style.height = tileSize + "px";
-
-    if(matched.has(idx)){
+    if(state.player.matched.includes(idx)){
       tile.classList.add("matched");
-      tile.textContent = face || "";
+      tile.textContent = face;
       tile.disabled = true;
     } else if(face){
       tile.classList.add("revealed");
       tile.textContent = face;
-   } else {
-  tile.classList.add("hidden");
-  tile.textContent = "💜💨";
-}
-
+    } else {
+      tile.classList.add("hidden");
+      tile.textContent = "💜💨";
     }
 
     tile.onclick = async () => {
       if(lockInput) return;
       if(lobby.status !== "running") return;
-      if(face) return; // already revealed
+      if(face) return;
 
       lockInput = true;
-
-      // ✅ protect UI from poll redraw mid-turn
-      pausePolling(isMobile() ? 2600 : 1600);
-
       await flip(idx);
-
-      // feedback window
-      pausePolling(isMobile() ? 1400 : 900);
-
-      setTimeout(() => { lockInput = false; }, 220);
+      setTimeout(()=>lockInput=false, 250);
     };
 
     grid.appendChild(tile);
   });
 
-  // Header stats
-  if($("status")){
-    $("status").textContent = `Status: ${lobby.status} • Players: ${lobby.player_count}/10 • Board: ${cols}x${rows}`;
-  }
-  if($("score"))   $("score").textContent   = state.player.score;
-  if($("matches")) $("matches").textContent = state.player.matches;
-  if($("misses"))  $("misses").textContent  = state.player.misses;
-  if($("you"))     $("you").textContent     = `You: ${state.player.name}${state.player.team ? " ("+state.player.team+")" : ""}`;
-  if($("mode"))    $("mode").textContent    = `Mode: ${lobby.mode === "teams" ? "Teams" : "Solo"}`;
+  $("status").textContent =
+    `Status: ${lobby.status} • Players: ${lobby.player_count}/10`;
 
-  if($("hint")){
-    if(lobby.status === "waiting"){
-      $("hint").textContent = "Waiting for host to start…";
-    } else if(lobby.status === "ended"){
-      $("hint").textContent = state.player.finished ? "Round ended — nice!" : "Round ended.";
-    } else {
-      $("hint").textContent = state.player.finished ? "✅ Finished! Watch the leaderboard." : "Find matches: +10 match, -1 miss.";
-    }
-  }
+  $("score").textContent   = state.player.score;
+  $("matches").textContent = state.player.matches;
+  $("misses").textContent  = state.player.misses;
 
-  // ---- Match/Miss FX ----
-  const curMisses = state.player.misses;
-  const currentMatched = new Set(state.grid.matched || []);
+  $("you").textContent = `You: ${state.player.name}`;
 
-  // newly matched tiles
-  const newlyMatched = [];
-  currentMatched.forEach(i => {
-    if(!prevMatchedSet.has(i)) newlyMatched.push(i);
-  });
-
-  if(newlyMatched.length){
-    beep("match");
-    newlyMatched.forEach(i => {
-      const btn = grid.querySelector(`.tile[data-idx="${i}"]`);
-      if(btn){
-        btn.classList.add("match-pop");
-        setTimeout(()=>btn.classList.remove("match-pop"), 260);
-      }
-    });
-  }
-
-  if(prevMisses !== null && curMisses > prevMisses){
-    beep("miss");
-    shakeGrid();
-  }
-
-  prevMisses = curMisses;
-  prevMatchedSet = currentMatched;
-
-  // Win confetti once
-  if(state.player.finished && !prevFinished){
-    beep("win");
-    if(!didConfetti){
-      didConfetti = true;
-      confettiBurst();
-    }
-  }
-  prevFinished = !!state.player.finished;
+  $("hint").textContent =
+    lobby.status === "waiting"
+      ? "Waiting for host to start…"
+      : "Find matching pairs!";
 }
 
-function renderLeaderboard(lb, mode){
-  const p = (lb.players || []);
-  let html = `<table class="tbl"><tr><th>#</th><th>Name</th><th>Team</th><th>Score</th><th>Matches</th><th>Misses</th></tr>`;
-  p.slice(0, 10).forEach((r, i) => {
-    html += `<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.team||"")}</td><td>${r.score}</td><td>${r.matches}</td><td>${r.misses}</td></tr>`;
+function renderLeaderboard(lb){
+  let html = `<table class="tbl">
+    <tr><th>#</th><th>Name</th><th>Score</th></tr>`;
+
+  lb.players.forEach((p,i)=>{
+    html += `<tr>
+      <td>${i+1}</td>
+      <td>${escapeHtml(p.name)}</td>
+      <td>${p.score}</td>
+    </tr>`;
   });
+
   html += `</table>`;
-  if($("lb")) $("lb").innerHTML = html;
-
-  if(mode === "teams" && (lb.teams||[]).length){
-    if($("teamsBox")){
-      $("teamsBox").style.display = "block";
-      let th = `<div class="card inner"><h4>Teams (best 3 combined)</h4>`;
-      th += `<table class="tbl"><tr><th>#</th><th>Team</th><th>Score</th><th>Top 3</th></tr>`;
-      lb.teams.forEach((t, i) => {
-        th += `<tr><td>${i+1}</td><td>${escapeHtml(t.team)}</td><td>${t.score}</td><td>${escapeHtml((t.members||[]).join(", "))}</td></tr>`;
-      });
-      th += `</table></div>`;
-      $("teamsBox").innerHTML = th;
-    }
-  } else {
-    if($("teamsBox")){
-      $("teamsBox").style.display = "none";
-      $("teamsBox").innerHTML = "";
-    }
-  }
+  $("lb").innerHTML = html;
 }
 
-// ------------------------------
-// Networking
-// ------------------------------
 async function getState(){
-  if(Date.now() < pauseUntil) return;
-
   try{
     const res = await fetch(`/api/state/${code}/${playerId}`);
+
+    if(!res.ok){
+      $("warmup").querySelector("h2").textContent =
+        "Lobby expired or server restarted";
+      $("warmup").querySelector("p").textContent =
+        "Please rejoin with a new code 💜";
+      return;
+    }
+
     const out = await res.json();
 
     if(!out.ok){
@@ -345,44 +106,22 @@ async function getState(){
       return;
     }
 
-    // Hide warmup once server responds
-    const warm = document.getElementById("warmup");
-    if(warm) warm.style.display = "none";
+    $("warmup").style.display = "none";
 
     renderGrid(out.state);
-    renderLeaderboard(out.leaderboard, out.state.lobby.mode);
+    renderLeaderboard(out.leaderboard);
   }catch(e){
-    // Keep warmup visible while waking
+    // keep warmup visible during cold start
   }
 }
 
 async function flip(idx){
-  try{
-    const res = await fetch("/api/flip", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({code, player_id: playerId, idx})
-    });
-    const out = await res.json();
-
-    if(out.ok && out.state){
-      renderGrid(out.state);
-
-      // ✅ Optional upgrade: longer protected window on mobile
-      pausePolling(isMobile() ? 1800 : 1200);
-    }
-  }catch(e){
-    // ignore
-  }
+  await fetch("/api/flip", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({code, player_id: playerId, idx})
+  });
 }
 
-window.addEventListener("resize", () => {
-  // Re-render quickly on orientation change
-  getState();
-});
-
-// Start
 getState();
-
-// Poll server state (slower on mobile = less chance of mid-turn overwrite)
-setInterval(getState, isMobile() ? 1100 : 750);
+setInterval(getState, 800);
