@@ -9,14 +9,9 @@
 <body>
   <div class="wrap">
     <h1>🎛️ Host Dashboard</h1>
-    <p class="muted">Create a lobby, then share the join code with your chat.</p>
+    <p class="muted">Create a lobby, then share the code with your chat.</p>
 
     <div class="card">
-      <div class="row">
-        <label>Host Key</label>
-        <input id="hostKey" placeholder="Enter host key" />
-      </div>
-
       <div class="row">
         <label>Mode</label>
         <select id="mode">
@@ -25,146 +20,108 @@
         </select>
       </div>
 
-      <div class="row" id="teamNote" style="display:none;">
-        <label></label>
-        <div class="tiny muted">Teams: players can optionally enter a team name when joining.</div>
-      </div>
-
       <div class="row">
-        <label>Board</label>
-        <select id="boardPreset">
-          <option value="6x4" selected>6×4 (recommended mobile)</option>
-          <option value="4x4">4×4 (quick)</option>
-          <option value="5x4">5×4 (balanced)</option>
-          <option value="6x5">6×5 (bigger)</option>
-          <option value="6x6">6×6 (standard)</option>
+        <label>Board Size</label>
+        <select id="size">
+          <option value="4">4x4 (quick)</option>
+          <option value="6" selected>6x6 (standard)</option>
         </select>
       </div>
 
-      <div class="row">
-        <label>Entry</label>
-        <select id="entry">
-          <option value="free" selected>Free</option>
-          <option value="ticket">Ticket</option>
-        </select>
-      </div>
-
-      <button class="btn" id="createLobbyBtn">Create Lobby</button>
-
-      <p class="tiny muted" style="margin-top:10px;">
-        Bookmark your secret host link so your key auto-fills.
-      </p>
-      <p class="tiny muted">
-        Tip: For paid entry, keep rules public: skill-based scoring, no random prize selection.
-      </p>
+      <button class="btn" id="createBtn">Create Lobby</button>
+      <p class="tiny muted" id="msg" style="margin-top:10px;"></p>
     </div>
 
-    <!-- Lobby Panel -->
-    <div class="card" id="lobbyPanel" style="display:none;">
-      <h2>Lobby</h2>
-
-      <div class="row">
-        <label>Code</label>
-        <div>
-          <span class="pill" id="codePill">—</span>
-        </div>
-      </div>
+    <div class="card" id="lobbyBox" style="display:none;">
+      <h3>Lobby</h3>
+      <p><span class="pill">Code: <span id="codeText"></span></span></p>
 
       <div class="hr"></div>
 
       <div class="grid2">
         <div>
-          <div class="tiny muted">Join link:</div>
-          <div class="row">
-            <input id="joinLink" readonly />
-            <button class="btn outline" id="copyJoinBtn">Copy</button>
-          </div>
-
-          <div class="tiny muted">Player view:</div>
-          <div class="row">
-            <input id="playLink" readonly />
-            <button class="btn outline" id="copyPlayBtn">Copy</button>
-          </div>
-
-          <div class="tiny muted">Spectator link:</div>
-          <div class="row">
-            <input id="watchLink" readonly />
-            <button class="btn outline" id="copyWatchBtn">Copy</button>
-          </div>
-
-          <!-- ✅ NEW: Overlay link -->
-          <div class="tiny muted">Stream Overlay (transparent):</div>
-          <div class="row">
-            <input id="overlayLink" readonly />
-            <button class="btn outline" id="copyOverlayBtn">Copy Overlay Link</button>
-          </div>
-
-          <p class="tiny muted" style="margin-top:6px;">
-            Overlay is leaderboard-only (no spoilers). Use it as a browser source in OBS or just screen-share it.
-          </p>
+          <div class="tiny muted">Join page</div>
+          <div><code id="joinLink"></code></div>
         </div>
-
         <div>
-          <div class="tiny muted">Round Controls</div>
-          <div class="row">
-            <button class="btn" id="startBtn">Start Round</button>
-            <button class="btn outline" id="endBtn">End Round</button>
-          </div>
-          <div class="row">
-            <button class="btn outline" id="resetBtn">Next Round (new board)</button>
-          </div>
-
-          <div class="hr"></div>
-
-          <div class="tiny muted">Prizes (optional)</div>
-          <div class="row">
-            <label>1st</label>
-            <input id="p1" placeholder="Prize for 1st" />
-          </div>
-          <div class="row">
-            <label>2nd</label>
-            <input id="p2" placeholder="Prize for 2nd" />
-          </div>
-          <div class="row">
-            <label>3rd</label>
-            <input id="p3" placeholder="Prize for 3rd" />
-          </div>
-          <div class="row">
-            <button class="btn outline" id="savePrizesBtn">Save Prizes</button>
-          </div>
+          <div class="tiny muted">Direct play link</div>
+          <div><code id="playLink"></code></div>
         </div>
       </div>
 
       <div class="hr"></div>
 
-      <h3>Chat Blurb</h3>
-      <textarea id="chatBlurb" rows="6" readonly></textarea>
-
-      <div class="row">
-        <button class="btn" id="copyBlurbBtn">📋 Copy Chat Blurb</button>
-        <button class="btn outline" id="shortenBlurbBtn">Make it shorter</button>
-      </div>
-
-      <div class="hr"></div>
-
-      <div class="row" style="justify-content:space-between;">
-        <h3 style="margin:0;">Players</h3>
-        <span class="pill" id="playerCountPill">Players: 0/10</span>
-      </div>
-
-      <div id="playersBox" class="tiny muted">No players yet.</div>
-
-      <div class="hr"></div>
-
-      <h3>Winners</h3>
-      <div class="tiny muted">End the round to freeze results, then copy winners for your notes.</div>
-      <div class="row">
-        <button class="btn outline" id="copyWinnersBtn">🏆 Copy Winners</button>
-      </div>
-      <textarea id="winnersText" rows="4" readonly class="tiny" style="width:100%;"></textarea>
+      <button class="btn" id="startBtn">Start Game</button>
+      <p class="tiny muted" style="margin-top:8px;">Players will see “waiting” until you start.</p>
     </div>
   </div>
 
-  <script src="/static/host.js"></script>
+  <script>
+    const msg = document.getElementById("msg");
+    const lobbyBox = document.getElementById("lobbyBox");
+    const codeText = document.getElementById("codeText");
+    const joinLink = document.getElementById("joinLink");
+    const playLink = document.getElementById("playLink");
+
+    let currentCode = null;
+
+    document.getElementById("createBtn").onclick = async () => {
+      msg.textContent = "Creating lobby…";
+      lobbyBox.style.display = "none";
+      currentCode = null;
+
+      try{
+        const size = parseInt(document.getElementById("size").value, 10);
+        const mode = document.getElementById("mode").value;
+
+        const res = await fetch("/api/create", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ size, mode })
+        });
+
+        const out = await res.json();
+
+        if(!out.ok){
+          msg.textContent = "Could not create lobby.";
+          return;
+        }
+
+        currentCode = out.code;
+        msg.textContent = "Lobby created ✅";
+
+        const base = window.location.origin;
+        codeText.textContent = currentCode;
+        joinLink.textContent = `${base}/join`;
+        playLink.textContent = `${base}/play/${currentCode}`;
+
+        lobbyBox.style.display = "block";
+      }catch(e){
+        msg.textContent = "Error creating lobby (check Render logs).";
+      }
+    };
+
+    document.getElementById("startBtn").onclick = async () => {
+      if(!currentCode){
+        msg.textContent = "Create a lobby first.";
+        return;
+      }
+
+      msg.textContent = "Starting…";
+
+      try{
+        const res = await fetch("/api/start", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ code: currentCode })
+        });
+
+        const out = await res.json();
+        msg.textContent = out.ok ? "Game started ✅" : "Could not start game.";
+      }catch(e){
+        msg.textContent = "Error starting game.";
+      }
+    };
+  </script>
 </body>
 </html>
