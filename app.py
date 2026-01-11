@@ -1,3 +1,4 @@
+import os
 import time
 import random
 import string
@@ -10,21 +11,12 @@ LOBBIES = {}
 # -----------------------------
 # Helpers
 # -----------------------------
-def make_code():
-    return "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
-
-def public_lobby(lobby):
-    return {
-        "code": lobby["code"],
-        "status": lobby["status"],
-        "size": lobby["size"],
-        "mode": lobby["mode"],
-        "player_count": len(lobby["players"]),
-    }
+def make_code(n=5):
+    return "".join(random.choices(string.ascii_uppercase + string.digits, k=n))
 
 def compute_leaderboard(lobby):
     players = list(lobby["players"].values())
-    players.sort(key=lambda p: (-p["score"], p["misses"]))
+    players.sort(key=lambda p: (-p["score"], p["misses"], p["name"].lower()))
     return {
         "players": [
             {
@@ -38,22 +30,42 @@ def compute_leaderboard(lobby):
         ]
     }
 
+def public_lobby(lobby):
+    return {
+        "code": lobby["code"],
+        "status": lobby["status"],
+        "size": lobby["size"],
+        "mode": lobby["mode"],
+        "player_count": len(lobby["players"]),
+        "max_players": lobby["max_players"],
+    }
+
+def build_player_faces(lobby_faces, revealed_set, matched_set):
+    # Return a list of faces with hidden cards as None
+    out = []
+    for i, f in enumerate(lobby_faces):
+        if i in matched_set or i in revealed_set:
+            out.append(f)
+        else:
+            out.append(None)
+    return out
+
 # -----------------------------
 # Pages
 # -----------------------------
-@app.route("/")
+@app.get("/")
 def home():
     return render_template("home.html")
 
-@app.route("/host")
+@app.get("/host")
 def host():
     return render_template("host.html")
 
-@app.route("/join")
+@app.get("/join")
 def join():
     return render_template("join.html")
 
-@app.route("/play/<code>")
+@app.get("/play/<code>")
 def play(code):
     return render_template("play.html", code=code.upper())
 
@@ -61,134 +73,222 @@ def play(code):
 # API
 # -----------------------------
 @app.post("/api/create")
-def create_lobby():
-    data = request.get_json(force=True)
+def api_create():
+    data = request.get_json(silent=True) or {}
     size = int(data.get("size", 6))
-    mode = data.get("mode", "solo")
+    mode = (data.get("mode") or "solo").strip().lower()
+    max_players = int(data.get("max_players", 10))
 
-    code = make_code()
+    if size not in (4, 6):
+        size = 6
+    if mode not in ("solo", "teams"):
+        mode = "solo"
+    if max_players < 1:
+        max_players = 10
+    if max_players > 10:
+        max_players = 10
 
-    icons = ["🍓","🍒","🍉","🍇","🍑","🥝","🍍","🍌","🍎","🍊","🥥","🫐"]
-    pairs = (size * size) // 2
-    faces = (icons[:pairs] * 2)
-    random.shuffle(faces)
+    code = make_code(5)
+
+    # Enough unique emojis for 6x6 (18 pairs)
+    icons = [
+        "🍓","🍒","🍉","🍇","🍑","🥝","🍍","🍌","🍎","🍊",
+        "🫐","🥥","🍋","🍐","🥭","🍈","🍏","🍔","🍟","🍕",
+        "🌮","🍦","🍩","🍪","🧁","🍫","🍬","🍿","🥨","🧋"
+    ]
+
+    tiles = size * size
+    pairs = tiles // 2
+    deck = (icons[:pairs] * 2)
+    random.shuffle(deck)
 
     LOBBIES[code] = {
         "code": code,
         "size": size,
         "mode": mode,
-        "status": "waiting",
-        "grid": {
-            "faces": faces,
-            "revealed": [],
-            "matched": [],
-        },
-        "players": {}
+        "status": "waiting",  # waiting | running | ended
+        "max_players": max_players,
+        "faces": deck,        # shared order
+        "players": {},        # per-player state
+        "created_at": time.time(),
     }
 
     return jsonify({"ok": True, "code": code})
 
+@app.post("/api/start")
+def api_start():
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip().upper()
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify({"ok": False, "error": "Lobby not found"}), 404
+
+    lobby["status"] = "running"
+    return jsonify({"ok": True})
+
 @app.post("/api/join")
-def join_lobby():
-    data = request.get_json(force=True)
-    code = data.get("code","").upper()
-    name = data.get("name","Player")
+def api_join():
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip().upper()
+    name = (data.get("name") or "Player").strip()
+    team = (data.get("team") or "").strip()
 
     lobby = LOBBIES.get(code)
     if not lobby:
-        return jsonify({"ok": False})
+        return jsonify({"ok": False, "error": "Lobby not found"}), 404
 
-    pid = str(time.time())
+    if len(lobby["players"]) >= lobby["max_players"]:
+        return jsonify({"ok": False, "error": "Lobby full"}), 400
+
+    # Allow joining even while waiting; also allow during running if you want.
+    # If you want to lock joining once running, uncomment this:
+    # if lobby["status"] != "waiting":
+    #     return jsonify({"ok": False, "error": "Joining locked"}), 400
+
+    # player id
+    pid = make_code(10)
 
     lobby["players"][pid] = {
         "id": pid,
-        "name": name,
+        "name": name[:20] if name else "Player",
+        "team": team[:16] if team else "",
         "score": 0,
         "matches": 0,
         "misses": 0,
-        "faces": [None] * (lobby["size"] * lobby["size"]),
-        "matched": []
+        "revealed": [],          # indices currently face-up (max 2)
+        "matched": set(),        # indices matched
+        "hide_at": 0.0,          # timestamp to auto-hide mismatch
     }
 
     return jsonify({"ok": True, "player_id": pid})
 
-@app.post("/api/start")
-def start_game():
-    data = request.get_json(force=True)
-    code = data.get("code","").upper()
-    lobby = LOBBIES.get(code)
-    if lobby:
-        lobby["status"] = "running"
-    return jsonify({"ok": True})
-
 @app.get("/api/state/<code>/<player_id>")
-def state(code, player_id):
+def api_state(code, player_id):
+    code = (code or "").strip().upper()
     lobby = LOBBIES.get(code)
     if not lobby:
-        return jsonify({"ok": False})
+        return jsonify({"ok": False, "error": "Lobby not found"}), 404
 
     player = lobby["players"].get(player_id)
     if not player:
-        return jsonify({"ok": False})
+        return jsonify({"ok": False, "error": "Player not found"}), 404
 
-    grid = lobby["grid"]
+    # Auto-hide mismatches after delay (without blocking server)
+    now = time.time()
+    if player["hide_at"] and now >= player["hide_at"]:
+        player["revealed"] = []
+        player["hide_at"] = 0.0
 
-    faces = []
-    for i, f in enumerate(grid["faces"]):
-        if i in grid["matched"] or i in grid["revealed"]:
-            faces.append(f)
-        else:
-            faces.append(None)
+    revealed_set = set(player["revealed"])
+    matched_set = set(player["matched"])
 
-    return jsonify({
-        "ok": True,
-        "state": {
-            "lobby": public_lobby(lobby),
-            "grid": {
-                "faces": faces,
-                "matched": grid["matched"]
-            },
-            "player": {
-                "name": player["name"],
-                "score": player["score"],
-                "matches": player["matches"],
-                "misses": player["misses"],
-            }
+    faces = build_player_faces(lobby["faces"], revealed_set, matched_set)
+
+    state = {
+        "lobby": public_lobby(lobby),
+        "grid": {
+            "faces": faces,
+            "matched": sorted(list(matched_set)),
         },
-        "leaderboard": compute_leaderboard(lobby)
-    })
+        "player": {
+            "player_id": player["id"],
+            "name": player["name"],
+            "team": player.get("team", ""),
+            "score": player["score"],
+            "matches": player["matches"],
+            "misses": player["misses"],
+            "finished": (len(matched_set) == (lobby["size"] * lobby["size"])),
+        }
+    }
+
+    return jsonify({"ok": True, "state": state, "leaderboard": compute_leaderboard(lobby)})
 
 @app.post("/api/flip")
 def api_flip():
-    data = request.get_json(force=True)
-    code = data.get("code","").upper()
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip().upper()
     player_id = data.get("player_id")
-    idx = int(data.get("idx",-1))
+    idx = data.get("idx")
 
     lobby = LOBBIES.get(code)
-    if not lobby or lobby["status"] != "running":
-        return jsonify({"ok": False})
+    if not lobby:
+        return jsonify({"ok": False, "error": "Lobby not found"}), 404
 
-    player = lobby["players"].get(player_id)
+    if lobby.get("status") != "running":
+        return jsonify({"ok": False, "error": "Round not running"}), 400
+
+    player = lobby.get("players", {}).get(player_id)
     if not player:
-        return jsonify({"ok": False})
+        return jsonify({"ok": False, "error": "Player not found"}), 404
 
-    grid = lobby["grid"]
+    try:
+        idx = int(idx)
+    except Exception:
+        return jsonify({"ok": False, "error": "Bad index"}), 400
 
-    if idx in grid["matched"] or idx in grid["revealed"]:
-        return jsonify({"ok": True})
+    tiles = lobby["size"] * lobby["size"]
+    if idx < 0 or idx >= tiles:
+        return jsonify({"ok": False, "error": "Index out of range"}), 400
 
-    grid["revealed"].append(idx)
+    # If mismatch hide timer passed, clear it now
+    now = time.time()
+    if player["hide_at"] and now >= player["hide_at"]:
+        player["revealed"] = []
+        player["hide_at"] = 0.0
 
-    if len(grid["revealed"]) == 2:
-        a, b = grid["revealed"]
-        if grid["faces"][a] == grid["faces"][b]:
-            grid["matched"] += [a, b]
+    matched = player["matched"]
+    revealed = player["revealed"]
+
+    # Ignore taps on matched or already revealed
+    if idx in matched or idx in revealed:
+        # Return state immediately
+        return api_state(code, player_id)
+
+    # If already have 2 revealed and hide_at not reached, ignore taps
+    if len(revealed) >= 2 and player["hide_at"] and now < player["hide_at"]:
+        return api_state(code, player_id)
+
+    revealed.append(idx)
+
+    # If 2 revealed -> check match
+    if len(revealed) == 2:
+        a, b = revealed[0], revealed[1]
+        if lobby["faces"][a] == lobby["faces"][b]:
+            matched.add(a)
+            matched.add(b)
             player["score"] += 10
             player["matches"] += 1
+            # clear immediately on match
+            player["revealed"] = []
+            player["hide_at"] = 0.0
         else:
             player["misses"] += 1
-            time.sleep(0.6)
-        grid["revealed"].clear()
+            # keep them revealed for a short time, then auto-hide in /api/state
+            player["hide_at"] = time.time() + 0.65
 
-    return jsonify({"ok": True})
+    # Return updated state + leaderboard immediately
+    revealed_set = set(player["revealed"])
+    matched_set = set(player["matched"])
+    faces = build_player_faces(lobby["faces"], revealed_set, matched_set)
+
+    state = {
+        "lobby": public_lobby(lobby),
+        "grid": {
+            "faces": faces,
+            "matched": sorted(list(matched_set)),
+        },
+        "player": {
+            "player_id": player["id"],
+            "name": player["name"],
+            "team": player.get("team", ""),
+            "score": player["score"],
+            "matches": player["matches"],
+            "misses": player["misses"],
+            "finished": (len(matched_set) == (lobby["size"] * lobby["size"])),
+        }
+    }
+
+    return jsonify({"ok": True, "state": state, "leaderboard": compute_leaderboard(lobby)})
+
+if __name__ == "__main__":
+    app.run(debug=True)
