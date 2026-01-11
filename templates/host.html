@@ -28,6 +28,15 @@
         </select>
       </div>
 
+      <div class="row">
+        <label>Players</label>
+        <select id="max_players">
+          <option value="5">5</option>
+          <option value="8">8</option>
+          <option value="10" selected>10</option>
+        </select>
+      </div>
+
       <button class="btn" id="createBtn">Create Lobby</button>
       <p class="tiny muted" id="msg" style="margin-top:10px;"></p>
     </div>
@@ -73,11 +82,12 @@
       try{
         const size = parseInt(document.getElementById("size").value, 10);
         const mode = document.getElementById("mode").value;
+        const max_players = parseInt(document.getElementById("max_players").value, 10);
 
         const res = await fetch("/api/create", {
           method: "POST",
           headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({ size, mode })
+          body: JSON.stringify({ size, mode, max_players })
         });
 
         const out = await res.json();
