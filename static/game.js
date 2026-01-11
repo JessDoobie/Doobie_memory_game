@@ -19,13 +19,10 @@ function escapeHtml(s){
 }
 
 function computeColumns(lobby){
-  // For rectangular boards, default columns = lobby.cols
-  // On tiny portrait screens, you can clamp to avoid micro-tiles
   const wide = window.innerWidth >= 700;
   const cols = lobby.cols;
 
   if(wide) return cols;
-  // If too many columns for phone, clamp to 4
   if(cols >= 6 && window.innerWidth < 420) return 4;
   return cols;
 }
@@ -42,7 +39,6 @@ function renderGrid(state){
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
   grid.innerHTML = "";
 
-  // Tile height (responsive)
   let h = 78;
   if(window.innerWidth < 420) h = 64;
   if(window.innerWidth < 360) h = 58;
@@ -62,33 +58,43 @@ function renderGrid(state){
       tile.textContent = face;
     } else {
       tile.classList.add("hidden");
-      tile.textContent = "💜💨";
+      tile.textContent = "💜";   // ✅ ONLY purple heart
     }
 
-    tile.onclick = async () => {
+    tile.onclick = () => {
       if(lockInput) return;
       if(lobby.status !== "running") return;
       if(face) return;
 
       lockInput = true;
-      await flip(idx);
-      setTimeout(()=>lockInput=false, 220);
+      flip(idx); // no await = instant feel
+      setTimeout(()=>lockInput=false, 180);
     };
 
     grid.appendChild(tile);
   });
 
-  $("status").textContent = `Status: ${lobby.status} • Players: ${lobby.player_count}/10 • Board: ${lobby.rows}x${lobby.cols}`;
-  $("score").textContent = state.player.score;
+  $("status").textContent =
+    `Status: ${lobby.status} • Players: ${lobby.player_count}/10 • Board: ${lobby.rows}x${lobby.cols}`;
+
+  $("score").textContent   = state.player.score;
   $("matches").textContent = state.player.matches;
-  $("misses").textContent = state.player.misses;
-  $("you").textContent = `You: ${state.player.name}${state.player.team ? " ("+state.player.team+")" : ""}`;
-  $("mode").textContent = `Mode: ${lobby.mode === "teams" ? "Teams" : "Solo"}`;
+  $("misses").textContent  = state.player.misses;
+
+  $("you").textContent =
+    `You: ${state.player.name}${state.player.team ? " ("+state.player.team+")" : ""}`;
+
+  $("mode").textContent =
+    `Mode: ${lobby.mode === "teams" ? "Teams" : "Solo"}`;
 
   if(lobby.status === "waiting"){
-    $("hint").textContent = lobby.allow_join ? "Waiting for host to start…" : "Joining locked — waiting for host…";
+    $("hint").textContent = lobby.allow_join
+      ? "Waiting for host to start…"
+      : "Joining locked — waiting for host…";
   } else if(lobby.status === "ended"){
-    $("hint").textContent = state.player.finished ? "Round ended — nice!" : "Round ended.";
+    $("hint").textContent = state.player.finished
+      ? "Round ended — nice!"
+      : "Round ended.";
   } else {
     $("hint").textContent = "Find matches: +10 match, -1 miss.";
   }
@@ -96,20 +102,38 @@ function renderGrid(state){
 
 function renderLeaderboard(lb, mode){
   const p = (lb.players || []);
-  let html = `<table class="tbl"><tr><th>#</th><th>Name</th><th>Team</th><th>Score</th><th>Matches</th><th>Misses</th></tr>`;
+  let html = `<table class="tbl">
+    <tr><th>#</th><th>Name</th><th>Team</th><th>Score</th><th>Matches</th><th>Misses</th></tr>`;
+
   p.slice(0, 10).forEach((r, i) => {
-    html += `<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.team||"")}</td><td>${r.score}</td><td>${r.matches}</td><td>${r.misses}</td></tr>`;
+    html += `<tr>
+      <td>${i+1}</td>
+      <td>${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(r.team||"")}</td>
+      <td>${r.score}</td>
+      <td>${r.matches}</td>
+      <td>${r.misses}</td>
+    </tr>`;
   });
+
   html += `</table>`;
   $("lb").innerHTML = html;
 
   if(mode === "teams" && (lb.teams||[]).length){
     $("teamsBox").style.display = "block";
     let th = `<div class="card inner"><h4>Teams (best 3 combined)</h4>`;
-    th += `<table class="tbl"><tr><th>#</th><th>Team</th><th>Score</th><th>Top 3</th></tr>`;
+    th += `<table class="tbl">
+      <tr><th>#</th><th>Team</th><th>Score</th><th>Top 3</th></tr>`;
+
     lb.teams.forEach((t, i) => {
-      th += `<tr><td>${i+1}</td><td>${escapeHtml(t.team)}</td><td>${t.score}</td><td>${escapeHtml((t.members||[]).join(", "))}</td></tr>`;
+      th += `<tr>
+        <td>${i+1}</td>
+        <td>${escapeHtml(t.team)}</td>
+        <td>${t.score}</td>
+        <td>${escapeHtml((t.members||[]).join(", "))}</td>
+      </tr>`;
     });
+
     th += `</table></div>`;
     $("teamsBox").innerHTML = th;
   } else {
@@ -119,11 +143,10 @@ function renderLeaderboard(lb, mode){
 }
 
 async function getState(){
-  try {
+  try{
     const res = await fetch(`/api/state/${code}/${playerId}`);
 
     if(!res.ok){
-      // Show a real message instead of hanging
       const warm = $("warmup");
       if(warm){
         warm.style.display = "flex";
@@ -146,18 +169,17 @@ async function getState(){
 
     renderGrid(out.state);
     renderLeaderboard(out.leaderboard, out.state.lobby.mode);
-  } catch (e) {
-    // keep warmup visible during cold starts
+  }catch(e){
+    // keep warmup during cold start
   }
 }
 
 async function flip(idx){
-  const res = await fetch("/api/flip", {
+  fetch("/api/flip", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({code, player_id: playerId, idx})
-  });
-  await res.json().catch(()=>{});
+  }).catch(()=>{});
 }
 
 window.addEventListener("resize", () => {
@@ -166,3 +188,4 @@ window.addEventListener("resize", () => {
 
 getState();
 setInterval(getState, 800);
+
