@@ -213,9 +213,11 @@ function renderGrid(state){
     } else if(face){
       tile.classList.add("revealed");
       tile.textContent = face;
-    } else {
-      tile.classList.add("hidden");
-      tile.textContent = "•";
+   } else {
+  tile.classList.add("hidden");
+  tile.textContent = "💜💨";
+}
+
     }
 
     tile.onclick = async () => {
