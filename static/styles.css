@@ -190,9 +190,33 @@ input::placeholder{
 }
 
 .tile.hidden{
-  background: rgba(11,15,25,.9);
-  color: #6e77a8;
+  /* Purple card-back gradient */
+  background:
+    radial-gradient(circle at top left, rgba(220,190,255,.35), transparent 45%),
+    linear-gradient(135deg, #6a3cff, #2a165f);
+
+  /* White card border (real deck look) */
+  border: 2px solid #ffffff;
+  border-radius: 14px;
+
+  /* Inner border + depth */
+  box-shadow:
+    inset 0 0 0 2px rgba(140,100,220,.55),
+    inset 0 0 18px rgba(255,255,255,.08),
+    0 10px 26px rgba(0,0,0,.35);
+
+  /* Center emoji */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #f7f2ff;
+  line-height: 1;
+  text-shadow: 0 6px 18px rgba(0,0,0,.35);
+
+  transition: transform .12s ease, box-shadow .12s ease;
 }
+
 
 .tile.revealed{
   background: rgba(125,79,255,.15);
