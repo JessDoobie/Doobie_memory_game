@@ -18,21 +18,44 @@ function escapeHtml(s){
     .replaceAll('"',"&quot;");
 }
 
+function computeColumns(lobby){
+  // For rectangular boards, default columns = lobby.cols
+  // On tiny portrait screens, you can clamp to avoid micro-tiles
+  const wide = window.innerWidth >= 700;
+  const cols = lobby.cols;
+
+  if(wide) return cols;
+  // If too many columns for phone, clamp to 4
+  if(cols >= 6 && window.innerWidth < 420) return 4;
+  return cols;
+}
+
 function renderGrid(state){
   const lobby = state.lobby;
+  const faces = state.grid.faces || [];
+  const matched = new Set(state.grid.matched || []);
+
   const grid = $("grid");
+  if(!grid) return;
+
+  const cols = computeColumns(lobby);
+  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
   grid.innerHTML = "";
 
-  grid.style.gridTemplateColumns = `repeat(${lobby.cols}, 1fr)`;
+  // Tile height (responsive)
+  let h = 78;
+  if(window.innerWidth < 420) h = 64;
+  if(window.innerWidth < 360) h = 58;
 
-  state.player.faces.forEach((face, idx) => {
+  faces.forEach((face, idx) => {
     const tile = document.createElement("button");
     tile.className = "tile";
-    tile.style.height = "70px";
+    tile.style.height = h + "px";
+    tile.dataset.idx = String(idx);
 
-    if(state.player.matched.includes(idx)){
+    if(matched.has(idx)){
       tile.classList.add("matched");
-      tile.textContent = face;
+      tile.textContent = face || "";
       tile.disabled = true;
     } else if(face){
       tile.classList.add("revealed");
@@ -49,52 +72,64 @@ function renderGrid(state){
 
       lockInput = true;
       await flip(idx);
-      setTimeout(()=>lockInput=false, 250);
+      setTimeout(()=>lockInput=false, 220);
     };
 
     grid.appendChild(tile);
   });
 
-  $("status").textContent =
-    `Status: ${lobby.status} • Players: ${lobby.player_count}/10`;
-
-  $("score").textContent   = state.player.score;
+  $("status").textContent = `Status: ${lobby.status} • Players: ${lobby.player_count}/10 • Board: ${lobby.rows}x${lobby.cols}`;
+  $("score").textContent = state.player.score;
   $("matches").textContent = state.player.matches;
-  $("misses").textContent  = state.player.misses;
+  $("misses").textContent = state.player.misses;
+  $("you").textContent = `You: ${state.player.name}${state.player.team ? " ("+state.player.team+")" : ""}`;
+  $("mode").textContent = `Mode: ${lobby.mode === "teams" ? "Teams" : "Solo"}`;
 
-  $("you").textContent = `You: ${state.player.name}`;
-
-  $("hint").textContent =
-    lobby.status === "waiting"
-      ? "Waiting for host to start…"
-      : "Find matching pairs!";
+  if(lobby.status === "waiting"){
+    $("hint").textContent = lobby.allow_join ? "Waiting for host to start…" : "Joining locked — waiting for host…";
+  } else if(lobby.status === "ended"){
+    $("hint").textContent = state.player.finished ? "Round ended — nice!" : "Round ended.";
+  } else {
+    $("hint").textContent = "Find matches: +10 match, -1 miss.";
+  }
 }
 
-function renderLeaderboard(lb){
-  let html = `<table class="tbl">
-    <tr><th>#</th><th>Name</th><th>Score</th></tr>`;
-
-  lb.players.forEach((p,i)=>{
-    html += `<tr>
-      <td>${i+1}</td>
-      <td>${escapeHtml(p.name)}</td>
-      <td>${p.score}</td>
-    </tr>`;
+function renderLeaderboard(lb, mode){
+  const p = (lb.players || []);
+  let html = `<table class="tbl"><tr><th>#</th><th>Name</th><th>Team</th><th>Score</th><th>Matches</th><th>Misses</th></tr>`;
+  p.slice(0, 10).forEach((r, i) => {
+    html += `<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.team||"")}</td><td>${r.score}</td><td>${r.matches}</td><td>${r.misses}</td></tr>`;
   });
-
   html += `</table>`;
   $("lb").innerHTML = html;
+
+  if(mode === "teams" && (lb.teams||[]).length){
+    $("teamsBox").style.display = "block";
+    let th = `<div class="card inner"><h4>Teams (best 3 combined)</h4>`;
+    th += `<table class="tbl"><tr><th>#</th><th>Team</th><th>Score</th><th>Top 3</th></tr>`;
+    lb.teams.forEach((t, i) => {
+      th += `<tr><td>${i+1}</td><td>${escapeHtml(t.team)}</td><td>${t.score}</td><td>${escapeHtml((t.members||[]).join(", "))}</td></tr>`;
+    });
+    th += `</table></div>`;
+    $("teamsBox").innerHTML = th;
+  } else {
+    $("teamsBox").style.display = "none";
+    $("teamsBox").innerHTML = "";
+  }
 }
 
 async function getState(){
-  try{
+  try {
     const res = await fetch(`/api/state/${code}/${playerId}`);
 
     if(!res.ok){
-      $("warmup").querySelector("h2").textContent =
-        "Lobby expired or server restarted";
-      $("warmup").querySelector("p").textContent =
-        "Please rejoin with a new code 💜";
+      // Show a real message instead of hanging
+      const warm = $("warmup");
+      if(warm){
+        warm.style.display = "flex";
+        warm.querySelector("h2").textContent = "Session not valid";
+        warm.querySelector("p").textContent = "Go back to Join and enter the code again 💜";
+      }
       return;
     }
 
@@ -106,22 +141,28 @@ async function getState(){
       return;
     }
 
-    $("warmup").style.display = "none";
+    const warm = $("warmup");
+    if(warm) warm.style.display = "none";
 
     renderGrid(out.state);
-    renderLeaderboard(out.leaderboard);
-  }catch(e){
-    // keep warmup visible during cold start
+    renderLeaderboard(out.leaderboard, out.state.lobby.mode);
+  } catch (e) {
+    // keep warmup visible during cold starts
   }
 }
 
 async function flip(idx){
-  await fetch("/api/flip", {
+  const res = await fetch("/api/flip", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({code, player_id: playerId, idx})
   });
+  await res.json().catch(()=>{});
 }
+
+window.addEventListener("resize", () => {
+  getState();
+});
 
 getState();
 setInterval(getState, 800);
