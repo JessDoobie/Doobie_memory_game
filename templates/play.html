@@ -4,51 +4,25 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Play • {{ code }}</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=1">
 </head>
 <body>
+
+  <!-- Warmup overlay -->
   <div id="warmup">
     <div class="box">
       <h2>Warming up…</h2>
       <div class="spinner"></div>
-      <p>Hang tight 🫶</p>
+      <p>Hang tight 💜</p>
     </div>
   </div>
-
-  <!-- Confetti canvas (hidden until win) -->
-  <canvas id="confetti"></canvas>
 
   <div class="wrap">
     <div class="topbar">
       <div>
-        <h1 style="margin:0;">🃏 Memory Match</h1>
-        <div class="tiny muted">Lobby: <b>{{ code }}</b></div>
+        <h2 id="status">Status: —</h2>
+        <div class="tiny muted" id="you"></div>
       </div>
-
-      <!-- Sound Controls -->
-      <div class="soundBox">
-        <label class="soundToggle">
-          <input type="checkbox" id="soundEnabled" checked />
-          <span>Sound</span>
-        </label>
-
-        <label class="soundVol">
-          <span class="tiny muted">Vol</span>
-          <input type="range" id="soundVol" min="0" max="100" value="45" />
-        </label>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="row">
-        <div><b id="you">You:</b></div>
-        <div><b id="mode">Mode:</b></div>
-      </div>
-      <div class="row">
-        <div id="status">Status:</div>
-        <div>Score: <b id="score">0</b> • Matches: <b id="matches">0</b> • Misses: <b id="misses">0</b></div>
-      </div>
-      <div class="tiny muted" id="hint"></div>
     </div>
 
     <div class="card">
@@ -56,15 +30,24 @@
     </div>
 
     <div class="card">
-      <h3 style="margin-top:0;">Leaderboard</h3>
-      <div id="teamsBox" style="display:none"></div>
+      <div class="row">
+        <div>Score: <b id="score">0</b></div>
+        <div>Matches: <b id="matches">0</b></div>
+        <div>Misses: <b id="misses">0</b></div>
+      </div>
+      <div class="tiny muted" id="hint"></div>
+    </div>
+
+    <div class="card">
+      <h3>Leaderboard</h3>
       <div id="lb"></div>
     </div>
   </div>
 
+  <!-- 🔑 THIS IS CRITICAL -->
   <script>
     window.MM_CODE = "{{ code }}";
   </script>
-  <script src="/static/game.js"></script>
+  <script src="/static/game.js?v=1"></script>
 </body>
 </html>
