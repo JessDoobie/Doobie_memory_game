@@ -1,32 +1,18 @@
-/* ------------------------------
-   Base / Reset
---------------------------------*/
-*{
-  box-sizing: border-box;
-}
+*{ box-sizing:border-box; }
 
 html, body{
-  margin: 0;
-  padding: 0;
-  background: #0b0f19;
-  color: #e8ebf3;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  margin:0;
+  padding:0;
+  background:#0b0f19;
+  color:#e8ebf3;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
 
-a{
-  color: inherit;
-  text-decoration: none;
-}
+a{ color:inherit; text-decoration:none; }
+button{ font-family:inherit; }
 
-button{
-  font-family: inherit;
-}
-
-/* ------------------------------
-   Layout
---------------------------------*/
 .wrap{
-  max-width: 900px;
+  max-width: 980px;
   margin: 0 auto;
   padding: 16px;
 }
@@ -39,42 +25,23 @@ button{
   margin-bottom: 14px;
 }
 
-.card.inner{
-  background: rgba(17,22,36,.7);
-}
-
 .hr{
   height: 1px;
   background: rgba(39,50,74,.7);
   margin: 14px 0;
 }
 
-/* ------------------------------
-   Text helpers
---------------------------------*/
-.muted{
-  color: #9aa3c7;
-}
+.muted{ color:#9aa3c7; }
+.tiny{ font-size:12px; }
 
-.tiny{
-  font-size: 12px;
-}
+h1,h2,h3,h4{ margin:0 0 8px 0; font-weight:800; }
 
-h1,h2,h3,h4{
-  margin: 0 0 8px 0;
-  font-weight: 700;
-}
-
-/* ------------------------------
-   Forms
---------------------------------*/
 .row{
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 10px;
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-bottom:10px;
 }
-
 .row label{
   min-width: 90px;
   font-size: 14px;
@@ -82,156 +49,102 @@ h1,h2,h3,h4{
 }
 
 input, select, textarea{
-  flex: 1;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(39,50,74,1);
+  flex:1;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid rgba(39,50,74,1);
   background: rgba(11,15,25,.8);
-  color: #e8ebf3;
-  outline: none;
+  color:#e8ebf3;
+  outline:none;
 }
 
-input::placeholder{
-  color: #6e77a8;
-}
-
-/* ------------------------------
-   Buttons
---------------------------------*/
 .btn{
-  padding: 10px 14px;
-  border-radius: 14px;
-  border: none;
-  background: #7d4fff;
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
+  padding:10px 14px;
+  border-radius:14px;
+  border:none;
+  background:#7d4fff;
+  color:#fff;
+  font-weight:700;
+  cursor:pointer;
 }
-
-.btn:hover{
-  filter: brightness(1.08);
-}
-
 .btn.outline{
-  background: transparent;
-  border: 1px solid rgba(125,79,255,.8);
-  color: #cfd6ff;
+  background:transparent;
+  border:1px solid rgba(125,79,255,.8);
+  color:#cfd6ff;
 }
 
-.btn:disabled{
-  opacity: .6;
-  cursor: not-allowed;
-}
+.btn:disabled{ opacity:.6; cursor:not-allowed; }
 
 .grid2{
-  display: grid;
+  display:grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
-
 @media (max-width: 520px){
-  .grid2{
-    grid-template-columns: 1fr;
-  }
+  .grid2{ grid-template-columns: 1fr; }
 }
 
-/* ------------------------------
-   Pills / badges
---------------------------------*/
 .pill{
-  display: inline-block;
+  display:inline-block;
   padding: 6px 10px;
   border-radius: 999px;
   background: rgba(125,79,255,.15);
   border: 1px solid rgba(125,79,255,.45);
-  font-weight: 600;
+  font-weight: 700;
 }
 
-/* ------------------------------
-   Tables (Leaderboard)
---------------------------------*/
 .tbl{
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
+  width:100%;
+  border-collapse:collapse;
+  font-size:14px;
 }
-
 .tbl th, .tbl td{
   padding: 6px 8px;
   border-bottom: 1px solid rgba(39,50,74,.6);
-  text-align: left;
+  text-align:left;
 }
-
 .tbl th{
-  color: #b9c2ff;
-  font-weight: 600;
+  color:#b9c2ff;
+  font-weight:700;
 }
 
-/* ------------------------------
-   Game Grid
---------------------------------*/
+.topbar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom: 12px;
+}
+
 .grid{
-  display: grid;
-  gap: 10px;
+  display:grid;
+  gap:10px;
 }
 
 .tile{
   border-radius: 14px;
   border: 1px solid rgba(39,50,74,1);
   background: rgba(17,22,36,.9);
-  color: #e8ebf3;
-  font-size: clamp(32px, 5vw, 44px);
-  cursor: pointer;
-  transition: transform .12s ease, background .12s ease, box-shadow .12s ease, border-color .12s ease;
-}
-
-.tile:active{
-  transform: scale(.98);
+  color:#e8ebf3;
+  font-size: 32px;
+  line-height: 1;
+  cursor:pointer;
+  transition: transform .08s ease, background .12s ease;
 }
 
 .tile.hidden{
-  /* Purple card-back gradient */
   background:
     radial-gradient(circle at top left, rgba(220,190,255,.35), transparent 45%),
     linear-gradient(135deg, #6a3cff, #2a165f);
-
-  /* White card border (real deck look) */
   border: 2px solid #ffffff;
-  border-radius: 14px;
-
-  /* Inner border + depth */
   box-shadow:
     inset 0 0 0 2px rgba(140,100,220,.55),
     inset 0 0 18px rgba(255,255,255,.08),
     0 10px 26px rgba(0,0,0,.35);
-
-  /* Center emoji */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  color: #f7f2ff;
-  line-height: 1;
-  text-shadow: 0 6px 18px rgba(0,0,0,.35);
-  font-size: clamp(26px, 4.5vw, 38px);
-  
-   transition: transform .12s ease, box-shadow .12s ease;
-
 }
-.tile:hover{
-  transform: none;
-}
-
-
-.tile.hidden:active{
-  transform: scale(0.97);
-}
-
 
 .tile.revealed{
   background: rgba(125,79,255,.15);
-  border-color: rgba(125,79,255,.55);
-  box-shadow: 0 0 0 2px rgba(125,79,255,.18) inset;
 }
 
 .tile.matched{
@@ -240,100 +153,23 @@ input::placeholder{
   cursor: default;
 }
 
-/* ------------------------------
-   Match / Miss FX
---------------------------------*/
-@keyframes pop {
-  0% { transform: scale(1); }
-  35% { transform: scale(1.08); }
-  100% { transform: scale(1); }
-}
-
-@keyframes shake {
-  0% { transform: translateX(0); }
-  20% { transform: translateX(-6px); }
-  40% { transform: translateX(6px); }
-  60% { transform: translateX(-4px); }
-  80% { transform: translateX(4px); }
-  100% { transform: translateX(0); }
-}
-
-.tile.match-pop{
-  animation: pop 220ms ease-out;
-  box-shadow: 0 0 0 2px rgba(125,79,255,.35),
-              0 12px 30px rgba(0,0,0,.25);
-}
-
-/* ✅ FIX: game.js adds "shake" class, so support that */
-.grid.shake{
-  animation: shake 220ms ease-out;
-}
-
-/* (kept for backward-compat if you ever used it) */
-#grid.grid-shake{
-  animation: shake 220ms ease-out;
-}
-
-/* ------------------------------
-   Top Bar + Sound Controls
---------------------------------*/
-.topbar{
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.soundBox{
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgba(11,15,25,.55);
-  border: 1px solid rgba(39,50,74,1);
-  border-radius: 14px;
-  padding: 8px 12px;
-}
-
-.soundToggle{
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-}
-
-.soundVol{
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.soundVol input[type="range"]{
-  width: 110px;
-}
-
 @media (max-width: 520px){
-  .soundVol input[type="range"]{
-    width: 90px;
+  .tile{
+    font-size: clamp(24px, 6vw, 34px);
   }
 }
 
-/* ------------------------------
-   Warmup Screen
---------------------------------*/
+/* Warmup */
 #warmup{
   position: fixed;
   inset: 0;
   background: rgba(11,15,25,.95);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display:flex;
+  align-items:center;
+  justify-content:center;
   z-index: 50;
 }
-
-#warmup .box{
-  text-align: center;
-}
+#warmup .box{ text-align:center; }
 
 .spinner{
   width: 38px;
@@ -344,48 +180,4 @@ input::placeholder{
   margin: 12px auto;
   animation: spin 1s linear infinite;
 }
-
-@keyframes spin{
-  to{ transform: rotate(360deg); }
-}
-
-/* ------------------------------
-   Confetti (particles used by game.js)
---------------------------------*/
-@keyframes confettiFall{
-  0%   { transform: translateY(-10px) rotate(0deg); opacity: 1; }
-  100% { transform: translateY(110vh) rotate(720deg); opacity: 0.9; }
-}
-
-.confetti{
-  position: fixed;
-  width: 10px;
-  height: 14px;
-  border-radius: 2px;
-  z-index: 60;
-  pointer-events: none;
-  /* no fixed color requirement from you, so keep it varied but not hard-coded via theme */
-  background: linear-gradient(180deg, rgba(125,79,255,.95), rgba(80,200,120,.9));
-  animation-name: confettiFall;
-  animation-timing-function: ease-in;
-  animation-fill-mode: forwards;
-}
-
-/* ------------------------------
-   Confetti Canvas (older / optional)
---------------------------------*/
-#confetti{
-  display: none;
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 40;
-}
-
-/* Mobile emoji sizing */
-@media (max-width: 520px){
-  .tile{
-    font-size: clamp(24px, 6vw, 34px);
-    line-height: 1;
-  }
-}
+@keyframes spin{ to{ transform: rotate(360deg); } }
