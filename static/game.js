@@ -18,127 +18,86 @@ function escapeHtml(s){
     .replaceAll('"',"&quot;");
 }
 
-/**
- * Mobile rule:
- * - Phones (portrait-ish) use 4 columns for big tap targets.
- * - Otherwise use lobby.cols.
- */
+/* Phones always use 4 columns */
 function computeColumns(lobby){
-  const cols = lobby.cols || 4;
-  const isPhone = window.innerWidth < 700;
-  const isPortrait = window.matchMedia("(orientation: portrait)").matches;
-
-  if(isPhone && isPortrait) return 4;
-  return cols;
+  return window.innerWidth < 700 ? 4 : lobby.cols;
 }
 
 function renderGrid(state){
   const lobby = state.lobby;
-  const rows = lobby.rows || 4;
-  const cols = lobby.cols || 4;
-
-  const faces = state.grid.faces || [];
+  const faces = state.grid.faces;
   const matched = new Set(state.grid.matched || []);
 
   const grid = $("grid");
-  const showCols = computeColumns(lobby);
-
-  grid.style.gridTemplateColumns = `repeat(${showCols}, 1fr)`;
+  const cols = computeColumns(lobby);
+  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
   grid.innerHTML = "";
 
-  // Tile height tuning (keeps phone scroll reasonable)
-  let h = 84;
+  /* Tile height tuning */
+  let h = 82;
   const isPhone = window.innerWidth < 700;
-  if(isPhone) h = 76;
-  if(isPhone && window.innerHeight < 760) h = 68;
+  if(isPhone) h = 72;
+  if(isPhone && lobby.rows >= 6) h = 64;
 
   faces.forEach((face, idx) => {
     const tile = document.createElement("button");
     tile.className = "tile";
     tile.style.height = h + "px";
-    tile.dataset.idx = String(idx);
+    tile.dataset.idx = idx;
 
     if(matched.has(idx)){
       tile.classList.add("matched");
-      tile.textContent = face || "";
+      tile.textContent = face;
       tile.disabled = true;
     } else if(face){
       tile.classList.add("revealed");
       tile.textContent = face;
     } else {
       tile.classList.add("hidden");
-      tile.textContent = "💜"; // back-of-card icon (single emoji)
+      tile.textContent = "💜";
     }
 
     tile.onclick = async () => {
       if(lockInput) return;
       if(lobby.status !== "running") return;
       if(face) return;
+
       lockInput = true;
       await flip(idx);
-      // very small cooldown prevents double-tap spam
-      setTimeout(() => { lockInput = false; }, 120);
+      setTimeout(()=>lockInput=false, 120);
     };
 
     grid.appendChild(tile);
   });
 
-  // Header stats
   $("status").textContent =
-    `Status: ${lobby.status} • Players: ${lobby.player_count}/10 • Board: ${rows}x${cols}`;
+    `Status: ${lobby.status} • Players: ${lobby.player_count} • Board: ${lobby.rows}x${lobby.cols}`;
 
   $("score").textContent = state.player.score;
   $("matches").textContent = state.player.matches;
   $("misses").textContent = state.player.misses;
-  $("you").textContent = `You: ${state.player.name}${state.player.team ? " ("+state.player.team+")" : ""}`;
-  $("mode").textContent = `Mode: ${lobby.mode === "teams" ? "Teams" : "Solo"}`;
+  $("you").textContent = `You: ${state.player.name}`;
+  $("mode").textContent = lobby.mode === "teams" ? "Teams" : "Solo";
 
   if(lobby.status === "waiting"){
-    $("hint").textContent = lobby.join_locked
-      ? "Joining locked — waiting for host…"
-      : "Waiting for host to start…";
-  } else if(lobby.status === "ended"){
-    $("hint").textContent = state.player.finished ? "Round ended — nice!" : "Round ended.";
+    $("hint").textContent = "Waiting for host to start…";
   } else {
-    $("hint").textContent = state.player.finished ? "✅ Finished! Watch the leaderboard." : "Find matches: +10 match, -1 miss.";
+    $("hint").textContent = "Find matches!";
   }
 }
 
-function renderLeaderboard(lb, mode){
-  const p = (lb.players || []);
-  let html = `<table class="tbl"><tr><th>#</th><th>Name</th><th>Team</th><th>Score</th><th>Matches</th><th>Misses</th></tr>`;
-  p.slice(0, 10).forEach((r, i) => {
+function renderLeaderboard(lb){
+  let html = `<table class="tbl">
+    <tr><th>#</th><th>Name</th><th>Score</th></tr>`;
+  lb.players.forEach((p,i)=>{
     html += `<tr>
       <td>${i+1}</td>
-      <td>${escapeHtml(r.name)}</td>
-      <td>${escapeHtml(r.team||"")}</td>
-      <td>${r.score}</td>
-      <td>${r.matches}</td>
-      <td>${r.misses}</td>
+      <td>${escapeHtml(p.name)}</td>
+      <td>${p.score}</td>
     </tr>`;
   });
   html += `</table>`;
   $("lb").innerHTML = html;
-
-  // Optional team summary block
-  if(mode === "teams" && (lb.teams||[]).length){
-    $("teamsBox").style.display = "block";
-    let th = `<div class="card inner"><h4>Teams (best 3 combined)</h4>`;
-    th += `<table class="tbl"><tr><th>#</th><th>Team</th><th>Score</th><th>Top 3</th></tr>`;
-    lb.teams.forEach((t, i) => {
-      th += `<tr>
-        <td>${i+1}</td>
-        <td>${escapeHtml(t.team)}</td>
-        <td>${t.score}</td>
-        <td>${escapeHtml((t.members||[]).join(", "))}</td>
-      </tr>`;
-    });
-    th += `</table></div>`;
-    $("teamsBox").innerHTML = th;
-  } else {
-    $("teamsBox").style.display = "none";
-    $("teamsBox").innerHTML = "";
-  }
 }
 
 async function getState(){
@@ -152,14 +111,13 @@ async function getState(){
       return;
     }
 
-    const warm = document.getElementById("warmup");
-    if(warm) warm.style.display = "none";
+    const warm = $("warmup");
+    if(warm) warm.classList.add("is-hidden");
 
     renderGrid(out.state);
-    renderLeaderboard(out.leaderboard, out.state.lobby.mode);
-
+    renderLeaderboard(out.leaderboard);
   }catch(e){
-    // keep warmup visible while server wakes
+    // server waking up
   }
 }
 
@@ -170,12 +128,10 @@ async function flip(idx){
     body: JSON.stringify({ code, player_id: playerId, idx })
   });
   const out = await res.json();
-  if(out.ok && out.state){
-    renderGrid(out.state);
-  }
+  if(out.ok) renderGrid(out.state);
 }
 
-window.addEventListener("resize", () => getState());
+window.addEventListener("resize", getState);
 
 getState();
-setInterval(getState, 650);
+setInterval(getState, 600);
