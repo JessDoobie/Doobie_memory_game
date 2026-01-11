@@ -213,8 +213,10 @@ input::placeholder{
   color: #f7f2ff;
   line-height: 1;
   text-shadow: 0 6px 18px rgba(0,0,0,.35);
+  font-size: clamp(26px, 4.5vw, 38px);
+  
+   transition: transform .12s ease, box-shadow .12s ease;
 
-  transition: transform .12s ease, box-shadow .12s ease;
 }
 .tile.hidden:hover{
   transform: translateY(-1px);
