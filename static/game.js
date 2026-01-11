@@ -175,12 +175,29 @@ async function getState(){
 }
 
 async function flip(idx){
-  fetch("/api/flip", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({code, player_id: playerId, idx})
-  }).catch(()=>{});
+  try{
+    const res = await fetch("/api/flip", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({code, player_id: playerId, idx})
+    });
+
+    const out = await res.json();
+
+    if(out.ok && out.state){
+      renderGrid(out.state);
+      if(out.leaderboard){
+        renderLeaderboard(out.leaderboard, out.state.lobby.mode);
+      }
+      // hide warmup if it was up
+      const warm = $("warmup");
+      if(warm) warm.style.display = "none";
+    }
+  }catch(e){
+    // ignore
+  }
 }
+
 
 window.addEventListener("resize", () => {
   getState();
