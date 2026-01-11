@@ -465,7 +465,25 @@ def api_flip():
     player["faces"] = faces
     player["matched"] = sorted(list(matched))
 
-    return jsonify({"ok": True})
+        state = {
+        "lobby": public_lobby(lobby),
+        "grid": {
+            "faces": player.get("faces", []),
+            "matched": player.get("matched", [])
+        },
+        "player": {
+            "player_id": player_id,
+            "name": player.get("name", ""),
+            "team": player.get("team", ""),
+            "score": player.get("score", 0),
+            "matches": player.get("matches", 0),
+            "misses": player.get("misses", 0),
+            "finished": player.get("finished", False),
+        }
+    }
+    lb = compute_leaderboard(lobby)
+    return jsonify({"ok": True, "state": state, "leaderboard": lb})
+
 
 
 if __name__ == "__main__":
