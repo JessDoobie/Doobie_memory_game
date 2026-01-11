@@ -4,11 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Play • {{ code }}</title>
-  <link rel="stylesheet" href="/static/styles.css?v=1">
+  <link rel="stylesheet" href="/static/styles.css?v=7">
 </head>
 <body>
 
-  <!-- Warmup overlay -->
   <div id="warmup">
     <div class="box">
       <h2>Warming up…</h2>
@@ -20,9 +19,19 @@
   <div class="wrap">
     <div class="topbar">
       <div>
-        <h2 id="status">Status: —</h2>
-        <div class="tiny muted" id="you"></div>
+        <h1 style="margin:0 0 6px 0;">Memory Match</h1>
+        <div class="tiny muted">Lobby: {{ code }}</div>
       </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between; flex-wrap:wrap;">
+        <div><b id="you">You: —</b></div>
+        <div class="muted" id="mode">Mode: —</div>
+      </div>
+
+      <div class="tiny" id="status">Status: —</div>
+      <div class="tiny muted" id="hint"></div>
     </div>
 
     <div class="card">
@@ -30,24 +39,23 @@
     </div>
 
     <div class="card">
-      <div class="row">
+      <div class="row" style="justify-content:space-between; flex-wrap:wrap;">
         <div>Score: <b id="score">0</b></div>
         <div>Matches: <b id="matches">0</b></div>
         <div>Misses: <b id="misses">0</b></div>
       </div>
-      <div class="tiny muted" id="hint"></div>
     </div>
 
     <div class="card">
       <h3>Leaderboard</h3>
       <div id="lb"></div>
+      <div id="teamsBox"></div>
     </div>
   </div>
 
-  <!-- 🔑 THIS IS CRITICAL -->
   <script>
     window.MM_CODE = "{{ code }}";
   </script>
-  <script src="/static/game.js?v=1"></script>
+  <script src="/static/game.js?v=7"></script>
 </body>
 </html>
