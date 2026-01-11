@@ -1,490 +1,194 @@
-import os
-import random
 import time
-from flask import Flask, jsonify, request, render_template, redirect
+import random
+import string
+from flask import Flask, request, jsonify, render_template
 
 app = Flask(__name__)
 
-# ----------------------------
-# Config
-# ----------------------------
-HOST_KEY = os.environ.get("HOST_KEY", "yourSecretKey")
-LOBBIES = {}  # code -> lobby dict
+LOBBIES = {}
 
-EMOJIS = list("🍓🍒🍉🍇🍍🥝🍑🍋🍏🍎🍐🍊🥥🥕🌽🍔🍟🍕🌮🍣🍪🍩🍰🧁🍫🍿🧠🦄🐶🐱🐻🐼🐸🐵🦊🐙🐳🦋🌈⭐️🔥💎🎀🎃🎄🎁🎮🎯🎲🎵🎧🚀🛸")
-
-
-# ----------------------------
+# -----------------------------
 # Helpers
-# ----------------------------
-def require_host(req) -> bool:
-    key = req.headers.get("X-Host-Key", "")
-    return bool(key) and key == HOST_KEY
-
-
-def make_code(n=6) -> str:
-    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    return "".join(random.choice(alphabet) for _ in range(n))
-
-
-def make_player_id() -> str:
-    alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
-    return "".join(random.choice(alphabet) for _ in range(12))
-
-
-def normalize_board(rows, cols):
-    try:
-        rows = int(rows)
-        cols = int(cols)
-    except Exception:
-        return None, None, "Board rows/cols must be numbers."
-
-    tiles = rows * cols
-    if tiles % 2 != 0:
-        return None, None, "Board must have an even number of tiles (pairs)."
-    if tiles < 8:
-        return None, None, "Board is too small."
-    if tiles > 60:
-        return None, None, "Board is too large (max 60 tiles)."
-
-    return rows, cols, None
-
-
-def build_deck(rows, cols):
-    tiles = rows * cols
-    pairs = tiles // 2
-
-    pool = EMOJIS[:]
-    if pairs > len(pool):
-        pool = pool * ((pairs // len(pool)) + 1)
-
-    random.shuffle(pool)
-    chosen = pool[:pairs]
-    deck = chosen + chosen
-    random.shuffle(deck)
-    return deck
-
-
-def player_init_board(p, tiles):
-    p["faces"] = [""] * tiles
-    p["matched"] = []
-    p["pending_hides"] = []
-    p["revealed"] = []
-
-
-def apply_player_pending_hides(player):
-    pending = player.get("pending_hides", [])
-    if not pending:
-        return
-
-    now = time.time()
-    faces = player.get("faces", [])
-    matched = set(player.get("matched", []))
-
-    keep = []
-    for item in pending:
-        if now >= item["hide_at"]:
-            a = item["a"]
-            b = item["b"]
-            if 0 <= a < len(faces) and a not in matched:
-                faces[a] = ""
-            if 0 <= b < len(faces) and b not in matched:
-                faces[b] = ""
-        else:
-            keep.append(item)
-
-    player["pending_hides"] = keep
-    player["faces"] = faces
-
+# -----------------------------
+def make_code():
+    return "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
 
 def public_lobby(lobby):
     return {
         "code": lobby["code"],
-        "mode": lobby.get("mode", "solo"),
-        "entry_mode": lobby.get("entry_mode", "free"),
-        "rows": int(lobby.get("rows", 6)),
-        "cols": int(lobby.get("cols", 6)),
-        "status": lobby.get("status", "waiting"),
-        "allow_join": bool(lobby.get("allow_join", True)),
-        "player_count": int(lobby.get("player_count", 0)),
-        "prizes": lobby.get("prizes", {"1": "", "2": "", "3": ""}),
+        "status": lobby["status"],
+        "size": lobby["size"],
+        "mode": lobby["mode"],
+        "player_count": len(lobby["players"]),
     }
-
 
 def compute_leaderboard(lobby):
-    players = list(lobby.get("players", {}).values())
-
-    players_sorted = sorted(
-        players,
-        key=lambda p: (p.get("score", 0), p.get("matches", 0), -p.get("misses", 0)),
-        reverse=True
-    )
-
-    out_players = []
-    for p in players_sorted:
-        out_players.append({
-            "player_id": p.get("player_id"),
-            "name": p.get("name", ""),
-            "team": p.get("team", ""),
-            "score": p.get("score", 0),
-            "matches": p.get("matches", 0),
-            "misses": p.get("misses", 0),
-        })
-
-    teams_out = []
-    if lobby.get("mode") == "teams":
-        team_map = {}
-        for p in out_players:
-            t = (p.get("team") or "").strip() or "Team"
-            team_map.setdefault(t, []).append(p)
-
-        for t, members in team_map.items():
-            members_sorted = sorted(members, key=lambda x: x["score"], reverse=True)
-            top3 = members_sorted[:3]
-            score = sum(m["score"] for m in top3)
-            teams_out.append({"team": t, "score": score, "members": [m["name"] for m in top3]})
-
-        teams_out.sort(key=lambda x: x["score"], reverse=True)
-
-    return {"players": out_players, "teams": teams_out}
-
-
-def init_round(lobby):
-    rows = int(lobby.get("rows", 6))
-    cols = int(lobby.get("cols", 6))
-    tiles = rows * cols
-
-    lobby["grid"] = {
-        "solution": build_deck(rows, cols)
+    players = list(lobby["players"].values())
+    players.sort(key=lambda p: (-p["score"], p["misses"]))
+    return {
+        "players": [
+            {
+                "name": p["name"],
+                "team": p.get("team", ""),
+                "score": p["score"],
+                "matches": p["matches"],
+                "misses": p["misses"],
+            }
+            for p in players
+        ]
     }
 
-    lobby["status"] = "waiting"
-    lobby["allow_join"] = True
-
-    for p in lobby.get("players", {}).values():
-        p["score"] = 0
-        p["matches"] = 0
-        p["misses"] = 0
-        p["finished"] = False
-        player_init_board(p, tiles)
-
-
-# ----------------------------
+# -----------------------------
 # Pages
-# ----------------------------
+# -----------------------------
 @app.route("/")
 def home():
     return render_template("home.html")
 
-
 @app.route("/host")
-def host_page():
+def host():
     return render_template("host.html")
 
-
 @app.route("/join")
-def join_page():
+def join():
     return render_template("join.html")
 
-
 @app.route("/play/<code>")
-def play_page(code):
-    return render_template("play.html", code=code)
+def play(code):
+    return render_template("play.html", code=code.upper())
 
-
-@app.route("/watch/<code>")
-def watch_page(code):
-    return render_template("watch.html", code=code)
-
-
-# ----------------------------
-# Host APIs
-# ----------------------------
-@app.route("/api/host/create_lobby", methods=["POST"])
-def host_create_lobby():
-    if not require_host(request):
-        return jsonify({"ok": False, "error": "Invalid host key."}), 403
-
-    data = request.get_json(silent=True) or {}
+# -----------------------------
+# API
+# -----------------------------
+@app.post("/api/create")
+def create_lobby():
+    data = request.get_json(force=True)
+    size = int(data.get("size", 6))
     mode = data.get("mode", "solo")
-    entry_mode = data.get("entry_mode", "free")
 
-    rows = data.get("rows", 6)
-    cols = data.get("cols", 6)
-    rows, cols, err = normalize_board(rows, cols)
-    if err:
-        return jsonify({"ok": False, "error": err}), 400
+    code = make_code()
 
-    code = make_code(6)
-    while code in LOBBIES:
-        code = make_code(6)
+    icons = ["🍓","🍒","🍉","🍇","🍑","🥝","🍍","🍌","🍎","🍊","🥥","🫐"]
+    pairs = (size * size) // 2
+    faces = (icons[:pairs] * 2)
+    random.shuffle(faces)
 
-    lobby = {
+    LOBBIES[code] = {
         "code": code,
+        "size": size,
         "mode": mode,
-        "entry_mode": entry_mode,
-        "rows": rows,
-        "cols": cols,
-        "created_at": time.time(),
         "status": "waiting",
-        "allow_join": True,
-        "players": {},
-        "player_count": 0,
-        "prizes": {"1": "", "2": "", "3": ""}
+        "grid": {
+            "faces": faces,
+            "revealed": [],
+            "matched": [],
+        },
+        "players": {}
     }
 
-    init_round(lobby)
-    LOBBIES[code] = lobby
-    return jsonify({"ok": True, "lobby": public_lobby(lobby)})
+    return jsonify({"ok": True, "code": code})
 
-
-@app.route("/api/host/start_round/<code>", methods=["POST"])
-def host_start_round(code):
-    if not require_host(request):
-        return jsonify({"ok": False, "error": "Invalid host key."}), 403
-
-    lobby = LOBBIES.get(code.strip().upper())
-    if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
-
-    lobby["status"] = "running"
-    lobby["allow_join"] = False
-    return jsonify({"ok": True})
-
-
-@app.route("/api/host/end_round/<code>", methods=["POST"])
-def host_end_round(code):
-    if not require_host(request):
-        return jsonify({"ok": False, "error": "Invalid host key."}), 403
-
-    lobby = LOBBIES.get(code.strip().upper())
-    if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
-
-    lobby["status"] = "ended"
-    lobby["allow_join"] = False
-    return jsonify({"ok": True})
-
-
-@app.route("/api/host/reset_lobby/<code>", methods=["POST"])
-def host_reset_lobby(code):
-    if not require_host(request):
-        return jsonify({"ok": False, "error": "Invalid host key."}), 403
-
-    lobby = LOBBIES.get(code.strip().upper())
-    if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
-
-    init_round(lobby)
-    return jsonify({"ok": True})
-
-
-@app.route("/api/host/set_prizes/<code>", methods=["POST"])
-def host_set_prizes(code):
-    if not require_host(request):
-        return jsonify({"ok": False, "error": "Invalid host key."}), 403
-
-    lobby = LOBBIES.get(code.strip().upper())
-    if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
-
-    data = request.get_json(silent=True) or {}
-    lobby["prizes"] = {
-        "1": (data.get("p1") or "").strip(),
-        "2": (data.get("p2") or "").strip(),
-        "3": (data.get("p3") or "").strip(),
-    }
-    return jsonify({"ok": True})
-
-
-@app.route("/api/host/kick/<code>", methods=["POST"])
-def host_kick(code):
-    if not require_host(request):
-        return jsonify({"ok": False, "error": "Invalid host key."}), 403
-
-    lobby = LOBBIES.get(code.strip().upper())
-    if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
-
-    data = request.get_json(silent=True) or {}
-    pid = data.get("player_id")
-    if pid and pid in lobby["players"]:
-        del lobby["players"][pid]
-        lobby["player_count"] = len(lobby["players"])
-    return jsonify({"ok": True})
-
-
-# ----------------------------
-# Player / Spectator APIs
-# ----------------------------
-@app.route("/api/join", methods=["POST"])
-def api_join():
-    data = request.get_json(silent=True) or {}
-    code = (data.get("code") or "").strip().upper()
-    name = (data.get("name") or "").strip()[:24]
-    team = (data.get("team") or "").strip()[:24]
+@app.post("/api/join")
+def join_lobby():
+    data = request.get_json(force=True)
+    code = data.get("code","").upper()
+    name = data.get("name","Player")
 
     lobby = LOBBIES.get(code)
     if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
+        return jsonify({"ok": False})
 
-    if not lobby.get("allow_join", True):
-        return jsonify({"ok": False, "error": "Joining is locked for this round."}), 403
+    pid = str(time.time())
 
-    if lobby.get("player_count", 0) >= 10:
-        return jsonify({"ok": False, "error": "Lobby is full (10 max)."}), 403
-
-    if not name:
-        return jsonify({"ok": False, "error": "Name required."}), 400
-
-    pid = make_player_id()
-    while pid in lobby["players"]:
-        pid = make_player_id()
-
-    tiles = int(lobby["rows"]) * int(lobby["cols"])
-
-    p = {
-        "player_id": pid,
+    lobby["players"][pid] = {
+        "id": pid,
         "name": name,
-        "team": team,
         "score": 0,
         "matches": 0,
         "misses": 0,
-        "finished": False,
+        "faces": [None] * (lobby["size"] * lobby["size"]),
+        "matched": []
     }
-    player_init_board(p, tiles)
 
-    lobby["players"][pid] = p
-    lobby["player_count"] = len(lobby["players"])
+    return jsonify({"ok": True, "player_id": pid})
 
-    return jsonify({"ok": True, "player_id": pid, "lobby": public_lobby(lobby)})
+@app.post("/api/start")
+def start_game():
+    data = request.get_json(force=True)
+    code = data.get("code","").upper()
+    lobby = LOBBIES.get(code)
+    if lobby:
+        lobby["status"] = "running"
+    return jsonify({"ok": True})
 
-
-@app.route("/api/lobby/<code>")
-def api_lobby(code):
-    code = (code or "").strip().upper()
+@app.get("/api/state/<code>/<player_id>")
+def state(code, player_id):
     lobby = LOBBIES.get(code)
     if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
+        return jsonify({"ok": False})
 
-    lb = compute_leaderboard(lobby)
-    return jsonify({"ok": True, "lobby": public_lobby(lobby), "leaderboard": lb})
-
-
-@app.route("/api/state/<code>/<player_id>")
-def api_state(code, player_id):
-    code = (code or "").strip().upper()
-    lobby = LOBBIES.get(code)
-    if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
-
-    player = lobby.get("players", {}).get(player_id)
+    player = lobby["players"].get(player_id)
     if not player:
-        return jsonify({"ok": False, "error": "Player not found"}), 404
+        return jsonify({"ok": False})
 
-    apply_player_pending_hides(player)
+    grid = lobby["grid"]
 
-    state = {
-        "lobby": public_lobby(lobby),
-        "grid": {
-            "faces": player.get("faces", []),
-            "matched": player.get("matched", [])
+    faces = []
+    for i, f in enumerate(grid["faces"]):
+        if i in grid["matched"] or i in grid["revealed"]:
+            faces.append(f)
+        else:
+            faces.append(None)
+
+    return jsonify({
+        "ok": True,
+        "state": {
+            "lobby": public_lobby(lobby),
+            "grid": {
+                "faces": faces,
+                "matched": grid["matched"]
+            },
+            "player": {
+                "name": player["name"],
+                "score": player["score"],
+                "matches": player["matches"],
+                "misses": player["misses"],
+            }
         },
-        "player": {
-            "player_id": player_id,
-            "name": player.get("name", ""),
-            "team": player.get("team", ""),
-            "score": player.get("score", 0),
-            "matches": player.get("matches", 0),
-            "misses": player.get("misses", 0),
-            "finished": player.get("finished", False),
-        }
-    }
+        "leaderboard": compute_leaderboard(lobby)
+    })
 
-    lb = compute_leaderboard(lobby)
-    return jsonify({"ok": True, "state": state, "leaderboard": lb})
-
-
-@app.route("/api/flip", methods=["POST"])
+@app.post("/api/flip")
 def api_flip():
-    data = request.get_json(silent=True) or {}
-    code = (data.get("code") or "").strip().upper()
+    data = request.get_json(force=True)
+    code = data.get("code","").upper()
     player_id = data.get("player_id")
-    idx = data.get("idx")
+    idx = int(data.get("idx",-1))
 
     lobby = LOBBIES.get(code)
-    if not lobby:
-        return jsonify({"ok": False, "error": "Lobby not found"}), 404
+    if not lobby or lobby["status"] != "running":
+        return jsonify({"ok": False})
 
-    if lobby.get("status") != "running":
-        return jsonify({"ok": False, "error": "Round not running"}), 400
-
-    player = lobby.get("players", {}).get(player_id)
+    player = lobby["players"].get(player_id)
     if not player:
-        return jsonify({"ok": False, "error": "Player not found"}), 404
+        return jsonify({"ok": False})
 
-    try:
-        idx = int(idx)
-    except Exception:
-        return jsonify({"ok": False, "error": "Bad index"}), 400
+    grid = lobby["grid"]
 
-    tiles = int(lobby["rows"]) * int(lobby["cols"])
-    if idx < 0 or idx >= tiles:
-        return jsonify({"ok": False, "error": "Index out of range"}), 400
-
-    apply_player_pending_hides(player)
-
-    faces = player.get("faces", [""] * tiles)
-    matched = set(player.get("matched", []))
-    solution = lobby["grid"]["solution"]
-
-    if idx in matched or faces[idx]:
+    if idx in grid["matched"] or idx in grid["revealed"]:
         return jsonify({"ok": True})
 
-    faces[idx] = solution[idx]
-    player.setdefault("revealed", [])
-    player["revealed"].append(idx)
+    grid["revealed"].append(idx)
 
-    if len(player["revealed"]) == 2:
-        a, b = player["revealed"][0], player["revealed"][1]
-        if a != b and solution[a] == solution[b]:
-            matched.add(a); matched.add(b)
-            player["matches"] += 1
+    if len(grid["revealed"]) == 2:
+        a, b = grid["revealed"]
+        if grid["faces"][a] == grid["faces"][b]:
+            grid["matched"] += [a, b]
             player["score"] += 10
+            player["matches"] += 1
         else:
             player["misses"] += 1
-            player["score"] -= 1
-            player.setdefault("pending_hides", []).append({
-                "a": a, "b": b, "hide_at": time.time() + 0.9
-            })
-        player["revealed"] = []
+            time.sleep(0.6)
+        grid["revealed"].clear()
 
-        if len(matched) >= tiles:
-            player["finished"] = True
-
-    player["faces"] = faces
-    player["matched"] = sorted(list(matched))
-
-        state = {
-        "lobby": public_lobby(lobby),
-        "grid": {
-            "faces": player.get("faces", []),
-            "matched": player.get("matched", [])
-        },
-        "player": {
-            "player_id": player_id,
-            "name": player.get("name", ""),
-            "team": player.get("team", ""),
-            "score": player.get("score", 0),
-            "matches": player.get("matches", 0),
-            "misses": player.get("misses", 0),
-            "finished": player.get("finished", False),
-        }
-    }
-    lb = compute_leaderboard(lobby)
-    return jsonify({"ok": True, "state": state, "leaderboard": lb})
-
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
+    return jsonify({"ok": True})
