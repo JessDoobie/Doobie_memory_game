@@ -2,6 +2,98 @@ import time, random, string
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
+import os
+import random
+import string
+from flask import request, jsonify
+
+# If you already have these globals, DON'T duplicate them — keep one copy.
+# If you don't have them, keep these:
+try:
+    LOBBIES
+except NameError:
+    LOBBIES = {}
+
+HOST_KEY = os.environ.get("HOST_KEY", "yourSecretKey")  # should match your Render env var
+
+def _new_code(n=5):
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no O/0/I/1
+    return "".join(random.choice(alphabet) for _ in range(n))
+
+def _board_preset(board_name: str):
+    # These match the dropdown values in host.html
+    if board_name == "extended":
+        return (4, 6)  # 24 cards
+    return (4, 5)      # standard 20 cards
+
+def _make_faces(total_cards: int):
+    # total_cards MUST be even
+    EMOJIS = ["🍓","🍇","🍒","🍉","🍍","🥝","🍑","🍋","🍊","🥥","🫐","🍏",
+              "🐱","🐶","🦊","🐻","🐼","🐸","🐵","🐰","🦄","🐙","🦋","🐝",
+              "⭐","🌙","☁️","🔥","🍀","🌈","💎","🎀","🎲","🎯","🎮","🎧"]
+    need_pairs = total_cards // 2
+    pool = EMOJIS[:]
+    random.shuffle(pool)
+    chosen = pool[:need_pairs]
+    faces = chosen + chosen
+    random.shuffle(faces)
+    return faces
+
+@app.route("/api/create", methods=["POST"])
+def api_create():
+    data = request.get_json(silent=True) or {}
+
+    # If you want to require host_key for create:
+    hk = (data.get("host_key") or "").strip()
+    if HOST_KEY and hk != HOST_KEY:
+        return jsonify({"ok": False, "error": "Bad host key"}), 403
+
+    mode = (data.get("mode") or "solo").strip().lower()
+    board = (data.get("board") or "standard").strip().lower()
+    entry = (data.get("entry") or "free").strip().lower()
+
+    rows, cols = _board_preset(board)
+    total = rows * cols
+    if total % 2 != 0:
+        return jsonify({"ok": False, "error": "Board must have an even number of cards"}), 400
+
+    code = _new_code()
+    while code in LOBBIES:
+        code = _new_code()
+
+    LOBBIES[code] = {
+        "code": code,
+        "mode": mode,              # "solo" or "teams"
+        "entry": entry,            # "free" or "paid"
+        "rows": rows,
+        "cols": cols,
+        "status": "waiting",       # waiting -> running -> ended
+        "join_locked": False,
+        "faces": _make_faces(total),
+        "revealed": {},            # player_id -> set(indexes currently revealed)
+        "matched": set(),          # global matched indexes (leaderboard-only version still ok)
+        "players": {},             # player_id -> player stats
+    }
+
+    return jsonify({"ok": True, "code": code, "rows": rows, "cols": cols, "mode": mode, "entry": entry})
+
+@app.route("/api/start", methods=["POST"])
+def api_start():
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip().upper()
+
+    hk = (data.get("host_key") or "").strip()
+    if HOST_KEY and hk != HOST_KEY:
+        return jsonify({"ok": False, "error": "Bad host key"}), 403
+
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify({"ok": False, "error": "Lobby not found"}), 404
+
+    lobby["status"] = "running"
+    lobby["join_locked"] = True
+    return jsonify({"ok": True})
+
 LOBBIES = {}
 
 PRESETS = {
