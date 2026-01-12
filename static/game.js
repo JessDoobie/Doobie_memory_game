@@ -30,6 +30,7 @@ window.addEventListener("scroll", () => {
 // State tracking
 // -------------------------------
 let lockInput = false;
+let flipInFlight = false;
 let prevMisses = null;
 let prevMatchedSet = new Set();
 
@@ -92,15 +93,26 @@ function renderGrid(state){
       tile.textContent = "💜";
     }
 
-    tile.onclick = async () => {
-      if(lockInput) return;
-      if(lobby.status !== "running") return;
-      if(face) return;
+   tile.onclick = async () => {
+  if (lockInput || flipInFlight) return;
+  if (lobby.status !== "running") return;
+  if (face) return;
 
-      lockInput = true;
-      await flip(idx);
-      setTimeout(() => lockInput = false, 120);
-    };
+  lockInput = true;
+  flipInFlight = true;
+
+  try {
+    await flip(idx);
+    // force immediate refresh so 2nd click doesn’t “stick”
+    await getState();
+  } catch (e) {
+    console.error("flip failed:", e);
+  } finally {
+    flipInFlight = false;
+    lockInput = false; // unlock immediately
+  }
+};
+
 
     grid.appendChild(tile);
   });
