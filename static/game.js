@@ -31,6 +31,9 @@ window.addEventListener("scroll", () => {
 // -------------------------------
 let lockInput = false;
 let flipInFlight = false;
+let stateInFlight = false;
+let stateQueued = false;
+
 let prevMisses = null;
 let prevMatchedSet = new Set();
 
@@ -187,7 +190,13 @@ function renderLeaderboard(lb){
 // Network
 // -------------------------------
 async function getState(){
-  try{
+  if (stateInFlight) { 
+    stateQueued = true; 
+    return; 
+  }
+  stateInFlight = true;
+
+  try {
     const res = await fetch(`/api/state/${code}/${playerId}`);
     const out = await res.json();
 
@@ -197,21 +206,25 @@ async function getState(){
       return;
     }
 
-    // Hide warmup when server responds
-    const warm = $("warmup");
-    if(warm) warm.classList.add("is-hidden");
+    // Hide warmup once server responds
+    const warm = document.getElementById("warmup");
+    if (warm) warm.style.display = "none";
 
-    // FIX A: Skip redraw while scrolling
-    if(!isUserScrolling){
-      renderGrid(out.state);
-      renderHUD(out.state);
-      renderLeaderboard(out.leaderboard);
+    renderGrid(out.state);
+    renderLeaderboard(out.leaderboard, out.state.lobby.mode);
+
+  } catch (e) {
+    // ignore; keep warmup if needed
+  } finally {
+    stateInFlight = false;
+    if (stateQueued) {
+      stateQueued = false;
+      // run one more time to catch up
+      getState();
     }
-
-  }catch(e){
-    // keep warmup visible while server sleeps
   }
 }
+
 
 async function flip(idx){
   const res = await fetch("/api/flip", {
