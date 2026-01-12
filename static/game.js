@@ -93,7 +93,7 @@ function renderGrid(state){
       tile.textContent = "💜";
     }
 
-   tile.onclick = async () => {
+ tile.onclick = async () => {
   if (lockInput || flipInFlight) return;
   if (lobby.status !== "running") return;
   if (face) return;
@@ -103,15 +103,18 @@ function renderGrid(state){
 
   try {
     await flip(idx);
-    // force immediate refresh so 2nd click doesn’t “stick”
-    await getState();
   } catch (e) {
     console.error("flip failed:", e);
   } finally {
+    // Unlock immediately so PC taps feel responsive
     flipInFlight = false;
-    lockInput = false; // unlock immediately
+    lockInput = false;
   }
+
+  // Refresh state in the background (don't block clicks)
+  getState();
 };
+
 
 
     grid.appendChild(tile);
