@@ -212,35 +212,69 @@ def state(code, pid):
 
 @app.post("/api/flip")
 def flip():
-    data = request.json
-    code = data["code"]
-    pid = data["player_id"]
-    idx = data["idx"]
+    data = request.get_json(silent=True) or {}
 
-    lobby = LOBBIES[code]
-    p = lobby["players"][pid]
+    code = (data.get("code") or "").strip().upper()
+    pid  = data.get("player_id") or data.get("playerId")
+    idx  = data.get("idx")
 
-    if lobby["status"] != "running": return jsonify(ok=False)
+    # Cast idx safely (phones sometimes send it as a string)
+    try:
+        idx = int(idx)
+    except Exception:
+        return jsonify(ok=False, error="Bad tile index"), 400
 
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify(ok=False, error="Lobby not found"), 404
+
+    if lobby.get("status") != "running":
+        return jsonify(ok=False, error="Round not running"), 400
+
+    players = lobby.get("players", {})
+    p = players.get(pid)
+    if not p:
+        return jsonify(ok=False, error="Player not found"), 404
+
+    faces = lobby.get("faces")
+    if not faces:
+        return jsonify(ok=False, error="Lobby faces missing"), 500
+
+    total = len(faces)
+
+    # Ensure player's arrays exist and match board size
+    if not p.get("revealed") or len(p["revealed"]) != total:
+        p["revealed"] = [None] * total
+    if not p.get("picks"):
+        p["picks"] = []
+    if not p.get("matched"):
+        p["matched"] = set()
+
+    # Ignore invalid indexes
+    if idx < 0 or idx >= total:
+        return jsonify(ok=False, error="Tile out of range"), 400
+
+    # Ignore clicks on already matched / already revealed tile
     if idx in p["matched"] or p["revealed"][idx]:
-        return jsonify(ok=True, state={})
+        return jsonify(ok=True)
 
-    p["revealed"][idx] = lobby["faces"][idx]
-
+    # Reveal this tile
+    p["revealed"][idx] = faces[idx]
     p["picks"].append(idx)
 
+    # If two picks, resolve match/miss
     if len(p["picks"]) == 2:
-        a,b = p["picks"]
-        if lobby["deck"][a] == lobby["deck"][b]:
-            p["matched"].update([a,b])
-            p["score"] += 10
-            p["matches"] += 1
+        a, b = p["picks"]
+        if faces[a] == faces[b]:
+            p["matched"].update([a, b])
+            p["score"] = int(p.get("score", 0)) + 10
+            p["matches"] = int(p.get("matches", 0)) + 1
             p["picks"] = []
+            p["hide_at"] = None
         else:
-            p["misses"] += 1
-            p["hide_at"] = time.time() + 0.45
+            p["misses"] = int(p.get("misses", 0)) + 1
+            # Keep revealed briefly; /api/state should hide them when time passes
+            p["hide_at"] = time.time() + 0.40  # slightly faster than 0.45
+            # Keep picks until hide occurs
 
-    return jsonify(ok=True, state={})
-
-if __name__ == "__main__":
-    app.run(debug=True)
+    return jsonify(ok=True)
