@@ -265,17 +265,22 @@ def flip():
     if not p.get("matched"):
         p["matched"] = set()
 
-    # Ignore invalid indexes
-    if idx < 0 or idx >= total:
-        return jsonify(ok=False, error="Tile out of range"), 400
+# Ignore invalid indexes
+if idx < 0 or idx >= total:
+    return jsonify(ok=False, error="Tile out of range"), 400
 
-    # Ignore clicks on already matched / already revealed tile
-    if idx in p["matched"] or p["revealed"][idx]:
-        return jsonify(ok=True)
+# Ignore clicks on already matched / already revealed tile
+if idx in p["matched"] or p["revealed"][idx]:
+    return jsonify(ok=True)
 
-    # Reveal this tile
-    p["revealed"][idx] = faces[idx]
-    p["picks"].append(idx)
+# If we're waiting to flip mismatched cards back, ignore new flips
+if p.get("hide_at") and time.time() < p["hide_at"]:
+    return jsonify(ok=False, error="Wait for cards to flip back…")
+
+# Reveal this tile
+p["revealed"][idx] = faces[idx]
+p["picks"].append(idx)
+
 
     # If two picks, resolve match/miss
     if len(p["picks"]) == 2:
