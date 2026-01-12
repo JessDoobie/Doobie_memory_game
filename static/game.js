@@ -239,4 +239,5 @@ window.addEventListener("resize", () => {
 });
 
 getState();
-setInterval(getState, 700);
+setInterval(getState, 1100);
+
