@@ -225,7 +225,8 @@ def flip():
     if idx in p["matched"] or p["revealed"][idx]:
         return jsonify(ok=True, state={})
 
-    p["revealed"][idx] = lobby["deck"][idx]
+    p["revealed"][idx] = lobby["faces"][idx]
+
     p["picks"].append(idx)
 
     if len(p["picks"]) == 2:
