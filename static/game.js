@@ -1,15 +1,41 @@
+// -------------------------------
+// Helpers
+// -------------------------------
 function $(id){ return document.getElementById(id); }
 
 const code = window.MM_CODE;
 const playerKey = "mm_player_id_" + code;
 let playerId = localStorage.getItem(playerKey);
 
+// If someone goes directly to /play without joining
 if(!playerId){
   window.location.href = "/join";
 }
 
-let lockInput = false;
+// -------------------------------
+// Mobile scroll protection (FIX A)
+// -------------------------------
+let isUserScrolling = false;
+let scrollTimer = null;
 
+window.addEventListener("scroll", () => {
+  isUserScrolling = true;
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(() => {
+    isUserScrolling = false;
+  }, 220);
+}, { passive: true });
+
+// -------------------------------
+// State tracking
+// -------------------------------
+let lockInput = false;
+let prevMisses = null;
+let prevMatchedSet = new Set();
+
+// -------------------------------
+// Utilities
+// -------------------------------
 function escapeHtml(s){
   return (s||"")
     .replaceAll("&","&amp;")
@@ -18,28 +44,35 @@ function escapeHtml(s){
     .replaceAll('"',"&quot;");
 }
 
-/* Phones always use 4 columns */
-function computeColumns(lobby){
-  return window.innerWidth < 700 ? 4 : lobby.cols;
+function computeColumns(cols){
+  const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+  const wide = window.innerWidth >= 700;
+
+  if(cols <= 4) return cols;
+  if(isLandscape || wide) return cols;
+  return Math.max(3, cols - 1);
 }
 
+// -------------------------------
+// Rendering
+// -------------------------------
 function renderGrid(state){
   const lobby = state.lobby;
-  const faces = state.grid.faces;
-  const matched = new Set(state.grid.matched || []);
+  const gridState = state.grid;
+  const matched = new Set(gridState.matched || []);
 
   const grid = $("grid");
-  const cols = computeColumns(lobby);
+  const cols = computeColumns(gridState.cols || lobby.cols || 4);
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+  // Responsive tile height
+  let h = 76;
+  if(window.innerHeight < 720) h = 66;
+  if(window.innerWidth < 380) h = 58;
+
   grid.innerHTML = "";
 
-  /* Tile height tuning */
-  let h = 82;
-  const isPhone = window.innerWidth < 700;
-  if(isPhone) h = 72;
-  if(isPhone && lobby.rows >= 6) h = 64;
-
-  faces.forEach((face, idx) => {
+  gridState.faces.forEach((face, idx) => {
     const tile = document.createElement("button");
     tile.className = "tile";
     tile.style.height = h + "px";
@@ -49,10 +82,12 @@ function renderGrid(state){
       tile.classList.add("matched");
       tile.textContent = face;
       tile.disabled = true;
-    } else if(face){
+    }
+    else if(face){
       tile.classList.add("revealed");
       tile.textContent = face;
-    } else {
+    }
+    else{
       tile.classList.add("hidden");
       tile.textContent = "💜";
     }
@@ -64,42 +99,78 @@ function renderGrid(state){
 
       lockInput = true;
       await flip(idx);
-      setTimeout(()=>lockInput=false, 120);
+      setTimeout(() => lockInput = false, 120);
     };
 
     grid.appendChild(tile);
   });
 
-  $("status").textContent =
-    `Status: ${lobby.status} • Players: ${lobby.player_count} • Board: ${lobby.rows}x${lobby.cols}`;
+  // Match FX
+  const newlyMatched = [];
+  matched.forEach(i => {
+    if(!prevMatchedSet.has(i)) newlyMatched.push(i);
+  });
 
-  $("score").textContent = state.player.score;
-  $("matches").textContent = state.player.matches;
-  $("misses").textContent = state.player.misses;
-  $("you").textContent = `You: ${state.player.name}`;
-  $("mode").textContent = lobby.mode === "teams" ? "Teams" : "Solo";
+  if(newlyMatched.length){
+    newlyMatched.forEach(i => {
+      const btn = grid.querySelector(`.tile[data-idx="${i}"]`);
+      if(btn){
+        btn.classList.add("match-pop");
+        setTimeout(() => btn.classList.remove("match-pop"), 220);
+      }
+    });
+  }
+
+  prevMatchedSet = matched;
+}
+
+function renderHUD(state){
+  const lobby = state.lobby;
+  const player = state.player;
+
+  $("status").textContent =
+    `Status: ${lobby.status} • Players: ${lobby.player_count}/10 • Board: ${lobby.rows}x${lobby.cols}`;
+
+  $("score").textContent = player.score;
+  $("matches").textContent = player.matches;
+  $("misses").textContent = player.misses;
+
+  $("you").textContent = `You: ${player.name}`;
+  $("mode").textContent = `Mode: ${lobby.mode === "teams" ? "Teams" : "Solo"}`;
 
   if(lobby.status === "waiting"){
     $("hint").textContent = "Waiting for host to start…";
-  } else {
+  }
+  else if(lobby.status === "ended"){
+    $("hint").textContent = "Round ended.";
+  }
+  else{
     $("hint").textContent = "Find matches!";
   }
 }
 
 function renderLeaderboard(lb){
+  const p = lb.players || [];
   let html = `<table class="tbl">
-    <tr><th>#</th><th>Name</th><th>Score</th></tr>`;
-  lb.players.forEach((p,i)=>{
+    <tr><th>#</th><th>Name</th><th>Score</th><th>Matches</th><th>Misses</th></tr>`;
+
+  p.slice(0,10).forEach((r,i)=>{
     html += `<tr>
       <td>${i+1}</td>
-      <td>${escapeHtml(p.name)}</td>
-      <td>${p.score}</td>
+      <td>${escapeHtml(r.name)}</td>
+      <td>${r.score}</td>
+      <td>${r.matches}</td>
+      <td>${r.misses}</td>
     </tr>`;
   });
+
   html += `</table>`;
   $("lb").innerHTML = html;
 }
 
+// -------------------------------
+// Network
+// -------------------------------
 async function getState(){
   try{
     const res = await fetch(`/api/state/${code}/${playerId}`);
@@ -111,13 +182,19 @@ async function getState(){
       return;
     }
 
+    // Hide warmup when server responds
     const warm = $("warmup");
     if(warm) warm.classList.add("is-hidden");
 
-    renderGrid(out.state);
-    renderLeaderboard(out.leaderboard);
+    // FIX A: Skip redraw while scrolling
+    if(!isUserScrolling){
+      renderGrid(out.state);
+      renderHUD(out.state);
+      renderLeaderboard(out.leaderboard);
+    }
+
   }catch(e){
-    // server waking up
+    // keep warmup visible while server sleeps
   }
 }
 
@@ -125,13 +202,26 @@ async function flip(idx){
   const res = await fetch("/api/flip", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ code, player_id: playerId, idx })
+    body: JSON.stringify({
+      code,
+      player_id: playerId,
+      idx
+    })
   });
+
   const out = await res.json();
-  if(out.ok) renderGrid(out.state);
+  if(out.ok && out.state){
+    renderGrid(out.state);
+    renderHUD(out.state);
+  }
 }
 
-window.addEventListener("resize", getState);
+// -------------------------------
+// Init
+// -------------------------------
+window.addEventListener("resize", () => {
+  if(!isUserScrolling) getState();
+});
 
 getState();
-setInterval(getState, 600);
+setInterval(getState, 700);
