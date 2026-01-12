@@ -21,6 +21,7 @@
         <label for="mode">Mode</label>
         <select id="mode">
           <option value="solo" selected>Solo</option>
+          <option value="teams">Teams</option>
         </select>
       </div>
 
@@ -36,6 +37,7 @@
         <label for="entry">Entry</label>
         <select id="entry">
           <option value="free" selected>Free</option>
+          <option value="paid">Paid</option>
         </select>
       </div>
 
@@ -62,6 +64,11 @@
         <strong id="playLink"></strong>
       </p>
 
+      <p class="tiny muted">
+        Spectator link:<br>
+        <strong id="watchLink"></strong>
+      </p>
+
       <button id="startBtn" class="btn">Start Game</button>
 
       <p class="tiny muted" style="margin-top:6px;">
@@ -79,37 +86,80 @@
     const codePill  = document.getElementById("codePill");
     const joinLink  = document.getElementById("joinLink");
     const playLink  = document.getElementById("playLink");
+    const watchLink = document.getElementById("watchLink");
 
     let currentCode = null;
 
+    // Pull host_key from the URL if present: /host?host_key=Doobie7731
+    const params = new URLSearchParams(window.location.search);
+    const hostKeyFromUrl = params.get("host_key") || "";
+
+    async function postJsonWithTimeout(url, body, ms=15000){
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), ms);
+
+      try{
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+        const data = await res.json().catch(() => null);
+        return { ok: res.ok, status: res.status, data };
+      } finally {
+        clearTimeout(t);
+      }
+    }
+
     createBtn.onclick = async () => {
       statusEl.textContent = "Creating lobby…";
+      createBtn.disabled = true;
 
-      const res = await fetch("/api/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: document.getElementById("mode").value,
-          board: document.getElementById("board").value,
-          entry: document.getElementById("entry").value
-        })
-      });
+      const payload = {
+        mode: document.getElementById("mode").value,
+        board: document.getElementById("board").value,
+        entry: document.getElementById("entry").value,
+      };
 
-      const data = await res.json();
+      // If your backend expects host_key, this will satisfy it.
+      if(hostKeyFromUrl) payload.host_key = hostKeyFromUrl;
 
-      if (!data.ok) {
-        statusEl.textContent = data.error || "Failed to create lobby.";
-        return;
+      try{
+        const resp = await postJsonWithTimeout("/api/create", payload, 20000);
+
+        // Fetch failed / timed out
+        if(!resp.data){
+          statusEl.textContent = "❌ Server didn’t respond. Check Render logs (app may be sleeping or crashed).";
+          createBtn.disabled = false;
+          return;
+        }
+
+        // Backend returned an error
+        if(!resp.data.ok){
+          statusEl.textContent = "❌ " + (resp.data.error || ("Create failed (HTTP " + resp.status + ")"));
+          createBtn.disabled = false;
+          return;
+        }
+
+        currentCode = resp.data.code;
+
+        statusEl.textContent = "Lobby created ✅";
+        lobbyBox.style.display = "block";
+
+        codePill.textContent = "Code: " + currentCode;
+        joinLink.textContent  = location.origin + "/join";
+        playLink.textContent  = location.origin + "/play/" + currentCode;
+        watchLink.textContent = location.origin + "/watch/" + currentCode;
+
+      } catch (e){
+        if(e.name === "AbortError"){
+          statusEl.textContent = "⏳ Timed out. Render free tier may be waking up OR /api/create is erroring. Check logs.";
+        } else {
+          statusEl.textContent = "❌ Network error: " + e.message;
+        }
+        createBtn.disabled = false;
       }
-
-      currentCode = data.code;
-
-      statusEl.textContent = "Lobby created ✓";
-      lobbyBox.style.display = "block";
-
-      codePill.textContent = "Code: " + currentCode;
-      joinLink.textContent = location.origin + "/join";
-      playLink.textContent = location.origin + "/play/" + currentCode;
     };
 
     startBtn.onclick = async () => {
@@ -118,14 +168,25 @@
       startBtn.disabled = true;
       startBtn.textContent = "Starting…";
 
-      await fetch("/api/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: currentCode })
-      });
+      const payload = { code: currentCode };
+      if(hostKeyFromUrl) payload.host_key = hostKeyFromUrl;
 
-      startBtn.textContent = "Game Started";
+      try{
+        const resp = await postJsonWithTimeout("/api/start", payload, 15000);
+        if(resp.data && resp.data.ok){
+          startBtn.textContent = "Game Started";
+        } else {
+          startBtn.textContent = "Start Game";
+          startBtn.disabled = false;
+          alert((resp.data && resp.data.error) ? resp.data.error : "Start failed.");
+        }
+      } catch (e){
+        startBtn.textContent = "Start Game";
+        startBtn.disabled = false;
+        alert("Network error starting game.");
+      }
     };
   </script>
 </body>
 </html>
+
