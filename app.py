@@ -246,8 +246,7 @@ def flip():
     if lobby.get("status") != "running":
         return jsonify(ok=False, error="Round not running"), 400
 
-    players = lobby.get("players", {})
-    p = players.get(pid)
+    p = lobby.get("players", {}).get(pid)
     if not p:
         return jsonify(ok=False, error="Player not found"), 404
 
@@ -260,27 +259,26 @@ def flip():
     # Ensure player's arrays exist and match board size
     if not p.get("revealed") or len(p["revealed"]) != total:
         p["revealed"] = [None] * total
-    if not p.get("picks"):
+    if "picks" not in p or p["picks"] is None:
         p["picks"] = []
-    if not p.get("matched"):
+    if "matched" not in p or p["matched"] is None:
         p["matched"] = set()
 
-# Ignore invalid indexes
-if idx < 0 or idx >= total:
-    return jsonify(ok=False, error="Tile out of range"), 400
+    # Ignore invalid indexes
+    if idx < 0 or idx >= total:
+        return jsonify(ok=False, error="Tile out of range"), 400
 
-# Ignore clicks on already matched / already revealed tile
-if idx in p["matched"] or p["revealed"][idx]:
-    return jsonify(ok=True)
+    # Ignore clicks on already matched / already revealed tile
+    if idx in p["matched"] or p["revealed"][idx]:
+        return jsonify(ok=True)
 
-# If we're waiting to flip mismatched cards back, ignore new flips
-if p.get("hide_at") and time.time() < p["hide_at"]:
-    return jsonify(ok=False, error="Wait for cards to flip back…")
+    # If we're waiting to flip mismatched cards back, ignore new flips
+    if p.get("hide_at") and time.time() < p["hide_at"]:
+        return jsonify(ok=False, error="Wait for cards to flip back…")
 
-# Reveal this tile
-p["revealed"][idx] = faces[idx]
-p["picks"].append(idx)
-
+    # Reveal this tile
+    p["revealed"][idx] = faces[idx]
+    p["picks"].append(idx)
 
     # If two picks, resolve match/miss
     if len(p["picks"]) == 2:
@@ -293,8 +291,7 @@ p["picks"].append(idx)
             p["hide_at"] = None
         else:
             p["misses"] = int(p.get("misses", 0)) + 1
-            # Keep revealed briefly; /api/state should hide them when time passes
-            p["hide_at"] = time.time() + 0.40  # slightly faster than 0.45
-            # Keep picks until hide occurs
+            p["hide_at"] = time.time() + 0.40  # /api/state flips them back
+            # keep picks until hide occurs
 
     return jsonify(ok=True)
