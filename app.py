@@ -174,12 +174,18 @@ def join_api():
 
 @app.get("/api/state/<code>/<pid>")
 def state(code, pid):
-    lobby = LOBBIES[code]
-    p = lobby["players"][pid]
+    code = (code or "").strip().upper()
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify(ok=False, error="Lobby not found"), 404
 
-    if p["hide_at"] and time.time() >= p["hide_at"]:
-        for i in p["picks"]:
-            if i not in p["matched"]:
+    p = lobby.get("players", {}).get(pid)
+    if not p:
+        return jsonify(ok=False, error="Player not found"), 404
+
+    if p.get("hide_at") and time.time() >= p["hide_at"]:
+        for i in p.get("picks", []):
+            if i not in p.get("matched", set()):
                 p["revealed"][i] = None
         p["picks"] = []
         p["hide_at"] = None
@@ -187,28 +193,37 @@ def state(code, pid):
     return jsonify(
         ok=True,
         state={
-            "lobby":{
-                "rows":lobby["rows"],
-                "cols":lobby["cols"],
-                "status":lobby["status"],
-                "player_count":len(lobby["players"]),
+            "lobby": {
+                "rows": lobby["rows"],
+                "cols": lobby["cols"],
+                "status": lobby["status"],
+                "player_count": len(lobby["players"]),
             },
-            "grid":{
-                "faces":p["revealed"],
-                "matched":list(p["matched"]),
+            "grid": {
+                "faces": p["revealed"],
+                "matched": list(p.get("matched", set())),
             },
-            "player":{
-                "name":p["name"],
-                "score":p["score"],
-                "matches":p["matches"],
-                "misses":p["misses"],
+            "player": {
+                "name": p["name"],
+                "score": p["score"],
+                "matches": p.get("matches", 0),
+                "misses": p.get("misses", 0),
             }
         },
         leaderboard={
-            "players":[{"name":v["name"],"score":v["score"]}
-                       for v in lobby["players"].values()]
+            "players": [
+                {
+                    "name": v.get("name", "Player"),
+                    "score": int(v.get("score", 0)),
+                    "matches": int(v.get("matches", 0)),
+                    "misses": int(v.get("misses", 0)),
+                }
+                for v in lobby["players"].values()
+            ]
         }
     )
+
+
 
 @app.post("/api/flip")
 def flip():
