@@ -114,6 +114,19 @@ function escapeHtml(s){
     .replaceAll(">","&gt;")
     .replaceAll('"',"&quot;");
 }
+function renderLeaderboard(lb){
+  const el = $("leaderboard");
+  el.innerHTML = "";
+
+  lb.players
+    .sort((a,b)=>b.score-a.score)
+    .forEach(p=>{
+      const row = document.createElement("div");
+      row.textContent = `${p.name} — ${p.score} pts (${p.matches}✓ / ${p.misses}✗)`;
+      el.appendChild(row);
+    });
+}
+
 
 async function createLobby(){
   const preset = $("boardPreset").value;
