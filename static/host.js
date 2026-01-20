@@ -116,16 +116,27 @@ function escapeHtml(s){
 }
 function renderLeaderboard(lb){
   const el = $("leaderboard");
+  if(!el) return;
+
   el.innerHTML = "";
 
-  lb.players
+  const players = lb?.players || [];
+  if(!players.length){
+    el.innerHTML = `<div class="tiny muted">No scores yet.</div>`;
+    return;
+  }
+
+  players
+    .slice()
     .sort((a,b)=>b.score-a.score)
     .forEach(p=>{
       const row = document.createElement("div");
-      row.textContent = `${p.name} — ${p.score} pts (${p.matches}✓ / ${p.misses}✗)`;
+      row.textContent =
+        `${p.name} — ${p.score} pts (${p.matches}✓ / ${p.misses}✗)`;
       el.appendChild(row);
     });
 }
+
 
 
 async function createLobby(){
@@ -154,13 +165,7 @@ async function createLobby(){
   showLobbyUI(out.lobby);
   refreshLobby(); // start polling
 }
-async function hostAction(action){
-  await fetch("/api/host/control", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({code: window.MM_CODE, action})
-  });
-}
+
 
 
 function showLobbyUI(lobby){
@@ -262,16 +267,19 @@ async function refreshLobby(){
   const out = await res.json();
   if(!out.ok) return;
 
-  // Update chat blurb entry line if entry mode changes (rare)
+  // chat blurb update
   if(lastBlurbLong){
     $("chatBlurb").value = buildChatBlurb(out.lobby.code, out.lobby.entry_mode, false);
   }else{
     $("chatBlurb").value = buildChatBlurb(out.lobby.code, out.lobby.entry_mode, true);
   }
 
+  // ✅ THESE THREE BELONG TOGETHER
   renderPlayers(out.leaderboard.players);
+  renderLeaderboard(out.leaderboard);   // ← ADD THIS LINE
   updateWinnersText(out.leaderboard, out.lobby);
 }
+
 
 function startPolling(){
   setInterval(() => {
