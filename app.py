@@ -293,5 +293,41 @@ def flip():
             p["misses"] = int(p.get("misses", 0)) + 1
             p["hide_at"] = time.time() + 0.40  # /api/state flips them back
             # keep picks until hide occurs
+    @app.post("/api/host/control")
+def host_control():
+    data = request.get_json() or {}
+    code = (data.get("code") or "").strip().upper()
+    action = data.get("action")
+
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify(ok=False, error="Lobby not found"), 404
+
+    if action == "start":
+        lobby["status"] = "running"
+
+    elif action == "next":
+        # reset board, keep players
+        import random
+        faces = lobby["faces"]
+        random.shuffle(faces)
+        lobby["faces"] = faces
+
+        for p in lobby["players"].values():
+            p["revealed"] = [None] * len(faces)
+            p["picks"] = []
+            p["matched"] = set()
+            p["hide_at"] = None
+
+        lobby["status"] = "running"
+
+    elif action == "end":
+        lobby["status"] = "ended"
+
+    else:
+        return jsonify(ok=False, error="Unknown action"), 400
+
+    return jsonify(ok=True, status=lobby["status"])
+
 
     return jsonify(ok=True)
