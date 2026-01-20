@@ -2,6 +2,14 @@
 // Helpers
 // -------------------------------
 function $(id){ return document.getElementById(id); }
+function renderStats(player){
+  if(!player) return;
+
+  $("score").textContent   = player.score ?? 0;
+  $("matches").textContent = player.matches ?? 0;
+  $("misses").textContent  = player.misses ?? 0;
+}
+
 
 const code = window.MM_CODE;
 const playerKey = "mm_player_id_" + code;
@@ -142,30 +150,7 @@ function renderGrid(state){
   prevMatchedSet = matched;
 }
 
-function renderHUD(state){
-  const lobby = state.lobby;
-  const player = state.player;
 
-  $("status").textContent =
-    `Status: ${lobby.status} • Players: ${lobby.player_count}/10 • Board: ${lobby.rows}x${lobby.cols}`;
-
-  $("score").textContent = player.score;
-  $("matches").textContent = player.matches;
-  $("misses").textContent = player.misses;
-
-  $("you").textContent = `You: ${player.name}`;
-  $("mode").textContent = `Mode: ${lobby.mode === "teams" ? "Teams" : "Solo"}`;
-
-  if(lobby.status === "waiting"){
-    $("hint").textContent = "Waiting for host to start…";
-  }
-  else if(lobby.status === "ended"){
-    $("hint").textContent = "Round ended.";
-  }
-  else{
-    $("hint").textContent = "Find matches!";
-  }
-}
 
 function renderLeaderboard(lb){
   const p = lb.players || [];
@@ -185,6 +170,15 @@ function renderLeaderboard(lb){
   html += `</table>`;
   $("lb").innerHTML = html;
 }
+function renderHUD(state){
+  const p = state?.player;
+  if(!p) return;
+
+  $("score").textContent   = p.score   ?? 0;
+  $("matches").textContent = p.matches ?? 0;
+  $("misses").textContent  = p.misses  ?? 0;
+}
+
 
 // -------------------------------
 // Network
@@ -210,8 +204,10 @@ async function getState(){
     const warm = document.getElementById("warmup");
     if (warm) warm.style.display = "none";
 
+    // ✅ THESE THREE MUST ALWAYS RUN TOGETHER
     renderGrid(out.state);
-    renderLeaderboard(out.leaderboard, out.state.lobby.mode);
+    renderHUD(out.state);                 // ← THIS IS THE FIX
+    renderLeaderboard(out.leaderboard);
 
   } catch (e) {
     // ignore; keep warmup if needed
@@ -219,11 +215,11 @@ async function getState(){
     stateInFlight = false;
     if (stateQueued) {
       stateQueued = false;
-      // run one more time to catch up
-      getState();
+      getState(); // catch up once
     }
   }
 }
+
 
 
 async function flip(idx){
