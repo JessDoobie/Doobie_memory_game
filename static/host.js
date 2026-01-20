@@ -141,6 +141,14 @@ async function createLobby(){
   showLobbyUI(out.lobby);
   refreshLobby(); // start polling
 }
+async function hostAction(action){
+  await fetch("/api/host/control", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({code: window.MM_CODE, action})
+  });
+}
+
 
 function showLobbyUI(lobby){
   $("lobbyPanel").style.display = "block";
