@@ -233,7 +233,6 @@ def flip():
     pid  = data.get("player_id") or data.get("playerId")
     idx  = data.get("idx")
 
-    # Cast idx safely (phones sometimes send it as a string)
     try:
         idx = int(idx)
     except Exception:
@@ -256,78 +255,43 @@ def flip():
 
     total = len(faces)
 
-    # Ensure player's arrays exist and match board size
+    # Ensure player state exists
     if not p.get("revealed") or len(p["revealed"]) != total:
         p["revealed"] = [None] * total
-    if "picks" not in p or p["picks"] is None:
+    if not p.get("picks"):
         p["picks"] = []
-    if "matched" not in p or p["matched"] is None:
+    if not p.get("matched"):
         p["matched"] = set()
 
-    # Ignore invalid indexes
+    # --- VALIDATION (inside function, correct order) ---
+
     if idx < 0 or idx >= total:
         return jsonify(ok=False, error="Tile out of range"), 400
 
-    # Ignore clicks on already matched / already revealed tile
+    # Ignore already revealed or matched tiles
     if idx in p["matched"] or p["revealed"][idx]:
         return jsonify(ok=True)
 
-    # If we're waiting to flip mismatched cards back, ignore new flips
+    # Lock input while waiting to flip mismatched cards back
     if p.get("hide_at") and time.time() < p["hide_at"]:
-        return jsonify(ok=False, error="Wait for cards to flip back…")
+        return jsonify(ok=False, error="Wait for cards to flip back")
 
-    # Reveal this tile
+    # --- REVEAL TILE ---
     p["revealed"][idx] = faces[idx]
     p["picks"].append(idx)
 
-    # If two picks, resolve match/miss
+    # --- RESOLVE PICK ---
     if len(p["picks"]) == 2:
         a, b = p["picks"]
+
         if faces[a] == faces[b]:
             p["matched"].update([a, b])
-            p["score"] = int(p.get("score", 0)) + 10
+            p["score"]   = int(p.get("score", 0)) + 10
             p["matches"] = int(p.get("matches", 0)) + 1
             p["picks"] = []
             p["hide_at"] = None
         else:
             p["misses"] = int(p.get("misses", 0)) + 1
-            p["hide_at"] = time.time() + 0.40  # /api/state flips them back
-            # keep picks until hide occurs
-    @app.post("/api/host/control")
-def host_control():
-    data = request.get_json() or {}
-    code = (data.get("code") or "").strip().upper()
-    action = data.get("action")
-
-    lobby = LOBBIES.get(code)
-    if not lobby:
-        return jsonify(ok=False, error="Lobby not found"), 404
-
-    if action == "start":
-        lobby["status"] = "running"
-
-    elif action == "next":
-        # reset board, keep players
-        import random
-        faces = lobby["faces"]
-        random.shuffle(faces)
-        lobby["faces"] = faces
-
-        for p in lobby["players"].values():
-            p["revealed"] = [None] * len(faces)
-            p["picks"] = []
-            p["matched"] = set()
-            p["hide_at"] = None
-
-        lobby["status"] = "running"
-
-    elif action == "end":
-        lobby["status"] = "ended"
-
-    else:
-        return jsonify(ok=False, error="Unknown action"), 400
-
-    return jsonify(ok=True, status=lobby["status"])
-
+            p["hide_at"] = time.time() + 0.40
 
     return jsonify(ok=True)
