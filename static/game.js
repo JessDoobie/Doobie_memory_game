@@ -85,8 +85,10 @@ function renderGrid(state){
   const matched = new Set(gridState.matched || []);
 
   const grid = $("grid");
-  const cols = computeColumns(gridState.faces.length);
+  const cols = computeColumns(gridState.cols || lobby.cols || 4);
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  // STEP 2D — tighten grid gap on phones
+grid.style.gap = window.innerWidth <= 480 ? "6px" : "10px";
 
  // Responsive tile height (mobile-safe)
 let h = 76;
