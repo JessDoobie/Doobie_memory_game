@@ -88,10 +88,18 @@ function renderGrid(state){
   const cols = computeColumns(gridState.faces.length);
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
 
-  // Responsive tile height
-  let h = 76;
-  if(window.innerHeight < 720) h = 66;
-  if(window.innerWidth < 380) h = 58;
+ // Responsive tile height (mobile-safe)
+let h = 76;
+const total = gridState.faces.length;
+
+if (window.innerWidth <= 480) {
+  if (total >= 30) h = 52;
+  else if (total >= 24) h = 56;
+  else h = 62;
+} else if (window.innerHeight < 720) {
+  h = 66;
+}
+
 
   grid.innerHTML = "";
 
