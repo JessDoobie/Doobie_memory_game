@@ -56,14 +56,25 @@ function escapeHtml(s){
     .replaceAll('"',"&quot;");
 }
 
-function computeColumns(cols){
-  const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-  const wide = window.innerWidth >= 700;
+function computeColumns(totalCards){
+  const w = window.innerWidth;
 
-  if(cols <= 4) return cols;
-  if(isLandscape || wide) return cols;
-  return Math.max(3, cols - 1);
+  // Phones
+  if (w <= 480) {
+    if (totalCards <= 16) return 4;   // 4x4
+    if (totalCards <= 20) return 4;   // 4x5
+    if (totalCards <= 24) return 4;   // 4x6
+    if (totalCards <= 30) return 5;   // 5x6
+  }
+
+  // Tablets / desktop
+  if (totalCards <= 20) return 5;
+  if (totalCards <= 24) return 6;
+  if (totalCards <= 30) return 6;
+
+  return 6;
 }
+
 
 // -------------------------------
 // Rendering
@@ -74,7 +85,7 @@ function renderGrid(state){
   const matched = new Set(gridState.matched || []);
 
   const grid = $("grid");
-  const cols = computeColumns(gridState.cols || lobby.cols || 4);
+  const cols = computeColumns(gridState.faces.length);
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
 
   // Responsive tile height
