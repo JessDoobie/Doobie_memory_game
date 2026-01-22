@@ -12,80 +12,57 @@
     <div class="topbar">
       <h1>🎲 Host Dashboard</h1>
     </div>
- 
 
-<h3>Leaderboard</h3>
-<div id="leaderboard"></div>
-
+    <h3>Leaderboard</h3>
+    <div id="leaderboard"></div>
 
     <!-- CREATE LOBBY -->
     <div class="card">
       <p class="muted">Create a lobby, then share the code with your chat.</p>
 
       <div class="row">
-        <label for="mode">Mode</label>
+        <label>Mode</label>
         <select id="mode">
-          <option value="solo" selected>Solo</option>
+          <option value="solo">Solo</option>
           <option value="teams">Teams</option>
         </select>
       </div>
 
       <div class="row">
-  <label for="boardPreset">Board</label>
-  <select id="boardPreset">
-    <option value="5x4" selected>Standard (4×5 • 20 cards)</option>
-    <option value="6x4">Extended (4×6 • 24 cards)</option>
-    <option value="6x5">XL (5×6 • 30 cards)</option>
-  </select>
-</div>
-
+        <label>Board</label>
+        <select id="boardPreset">
+          <option value="5x4">Standard (4×5 • 20 cards)</option>
+          <option value="6x4">Extended (4×6 • 24 cards)</option>
+          <option value="6x5">XL (5×6 • 30 cards)</option>
+        </select>
+      </div>
 
       <div class="row">
-        <label for="entry">Entry</label>
+        <label>Entry</label>
         <select id="entry">
-          <option value="free" selected>Free</option>
+          <option value="free">Free</option>
           <option value="paid">Paid</option>
         </select>
       </div>
 
       <button id="createLobbyBtn" class="btn">Create Lobby</button>
-
-      <div id="createStatus" class="tiny muted" style="margin-top:8px;"></div>
+      <div id="createStatus" class="tiny muted"></div>
     </div>
 
     <!-- LOBBY INFO -->
     <div id="lobbyBox" class="card" style="display:none;">
       <h3>Lobby</h3>
+      <div class="pill" id="codePill">----</div>
 
-      <div class="pill" id="codePill">Code: ----</div>
-
-      <div class="hr"></div>
-
-      <p class="tiny muted">
-        Join page:<br>
-        <strong id="joinLink"></strong>
-      </p>
-
-      <p class="tiny muted">
-        Direct play link:<br>
-        <strong id="playLink"></strong>
-      </p>
-
-      <p class="tiny muted">
-        Spectator link:<br>
-        <strong id="watchLink"></strong>
-      </p>
+      <p class="tiny muted">Join: <span id="joinLink"></span></p>
+      <p class="tiny muted">Play: <span id="playLink"></span></p>
+      <p class="tiny muted">Watch: <span id="watchLink"></span></p>
 
       <button id="startBtn" class="btn">Start Game</button>
-
-      <p class="tiny muted" style="margin-top:6px;">
-        Players will see “waiting” until you start.
-      </p>
     </div>
 
   </div>
-<script src="/static/host.js"></script>
 
+  <script src="/static/host.js"></script>
 </body>
 </html>
-
