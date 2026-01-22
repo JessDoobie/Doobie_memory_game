@@ -200,24 +200,43 @@ function showLobbyUI(lobby){
     $("chatBlurb").value = buildChatBlurb(lobby.code, lobby.entry_mode, !lastBlurbLong);
   };
 
-  // Round controls
-  $("startBtn").onclick = async () => {
+  // Round controls (SAFE — won't crash if buttons are missing)
+const startBtn = $("startBtn");
+if (startBtn) {
+  startBtn.onclick = async () => {
     if(!currentLobbyCode) return;
-    await fetch(`/api/host/start_round/${currentLobbyCode}`, {method:"POST", headers: apiHostHeaders()});
+    await fetch(`/api/host/start_round/${currentLobbyCode}`, {
+      method: "POST",
+      headers: apiHostHeaders()
+    });
     refreshLobby();
   };
+}
 
-  $("endBtn").onclick = async () => {
+const endBtn = $("endBtn");
+if (endBtn) {
+  endBtn.onclick = async () => {
     if(!currentLobbyCode) return;
-    await fetch(`/api/host/end_round/${currentLobbyCode}`, {method:"POST", headers: apiHostHeaders()});
+    await fetch(`/api/host/end_round/${currentLobbyCode}`, {
+      method: "POST",
+      headers: apiHostHeaders()
+    });
     refreshLobby();
   };
+}
 
-  $("resetBtn").onclick = async () => {
+const resetBtn = $("resetBtn");
+if (resetBtn) {
+  resetBtn.onclick = async () => {
     if(!currentLobbyCode) return;
-    await fetch(`/api/host/reset_lobby/${currentLobbyCode}`, {method:"POST", headers: apiHostHeaders()});
+    await fetch(`/api/host/reset_lobby/${currentLobbyCode}`, {
+      method: "POST",
+      headers: apiHostHeaders()
+    });
     refreshLobby();
   };
+}
+
 
   // Prizes
   $("savePrizesBtn").onclick = async () => {
