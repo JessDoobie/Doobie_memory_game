@@ -292,9 +292,10 @@ document.addEventListener("DOMContentLoaded", () => {
   updateTeamNote();
   $("mode").addEventListener("change", updateTeamNote);
 
+  console.log("create button:", $("createLobbyBtn"));
+
   $("createLobbyBtn").addEventListener("click", createLobby);
 
-  // If you already created a lobby and refresh the page, you can paste the code manually
-  // (but normally you just create a new one each time).
   startPolling();
 });
+
