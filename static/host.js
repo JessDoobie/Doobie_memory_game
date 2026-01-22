@@ -2,7 +2,11 @@ function $(id) {
   return document.getElementById(id);
 }
 
+const params = new URLSearchParams(window.location.search);
+const HOST_KEY = params.get("host_key") || "";
+
 let currentLobbyCode = null;
+
 
 function boardPresetToRowsCols(preset) {
   const [cols, rows] = preset.split("x").map(Number);
@@ -23,10 +27,14 @@ async function createLobby() {
   $("createStatus").textContent = "Creating lobby…";
 
   const res = await fetch("/api/host/create_lobby", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "X-Host-Key": HOST_KEY
+  },
+  body: JSON.stringify(body)
+});
+
 
   const out = await res.json();
 
