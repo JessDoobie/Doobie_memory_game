@@ -64,22 +64,33 @@ async function createLobby(){
 // UI
 // -------------------------------
 function showLobbyUI(lobby){
-  const lobbyBox = $("lobbyBox");
-  if (lobbyBox) lobbyBox.style.display = "block";
+  const panel = $("lobbyBox");
+  if (!panel) return;
 
+  panel.style.display = "block";
   $("codePill").textContent = lobby.code;
-  $("joinLink").textContent  = `${baseUrl()}/join`;
-  $("playLink").textContent  = `${baseUrl()}/play/${lobby.code}`;
-  $("watchLink").textContent = `${baseUrl()}/watch/${lobby.code}`;
+
+  const join = `${baseUrl()}/join`;
+  const play = `${baseUrl()}/play/${lobby.code}`;
+  const watch = `${baseUrl()}/watch/${lobby.code}`;
+
+  $("joinLink").textContent  = join;
+  $("playLink").textContent  = play;
+  $("watchLink").textContent = watch;
 
   const startBtn = $("startBtn");
-  if(startBtn){
+  if (startBtn) {
     startBtn.onclick = async () => {
-      await fetch(`/api/host/start_round/${currentLobbyCode}`, { method:"POST" });
+      if (!currentLobbyCode) return;
+      await fetch(`/api/host/start_round/${currentLobbyCode}`, {
+        method: "POST",
+        headers: apiHostHeaders()
+      });
       refreshLobby();
     };
   }
 }
+
 
 // -------------------------------
 // Refresh
