@@ -31,6 +31,9 @@ function boardPresetToRowsCols(preset){
 // Create Lobby
 // -------------------------------
 async function createLobby(){
+  console.log("createLobby() fired");
+
+async function createLobby(){
   const preset = $("boardPreset").value;
   const {rows, cols} = boardPresetToRowsCols(preset);
 
