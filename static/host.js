@@ -26,7 +26,7 @@ async function createLobby() {
 
   $("createStatus").textContent = "Creating lobby…";
 
-  const res = await fetch("/api/host/create_lobby", {
+  const res = await fetch("/api/create", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
