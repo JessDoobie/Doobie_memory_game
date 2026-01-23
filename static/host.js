@@ -17,35 +17,38 @@ async function createLobby() {
   const preset = $("boardPreset").value;
   const { rows, cols } = boardPresetToRowsCols(preset);
 
-  const body = {
-    mode: $("mode").value,
-    entry_mode: $("entry").value,
-    rows,
-    cols
-  };
-
   $("createStatus").textContent = "Creating lobby…";
 
-  const res = await fetch("/api/create", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "X-Host-Key": HOST_KEY
-  },
-  body: JSON.stringify(body)
-});
+  const body = {
+    mode: $("mode").value,
+    entry: $("entry").value,
+    board: preset,
+    host_key: HOST_KEY   // ✅ THIS IS THE KEY FIX
+  };
 
+  try {
+    const res = await fetch("/api/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
 
-  const out = await res.json();
+    const out = await res.json();
 
-  if (!out.ok) {
-    $("createStatus").textContent = out.error || "Failed to create lobby";
-    return;
+    if (!out.ok) {
+      $("createStatus").textContent = out.error || "Failed to create lobby";
+      return;
+    }
+
+    currentLobbyCode = out.code;
+    $("createStatus").textContent = "Lobby created ✅";
+    showLobby({ code: out.code });
+
+  } catch (err) {
+    $("createStatus").textContent = "Network error creating lobby";
   }
-
-  currentLobbyCode = out.lobby.code;
-  showLobby(out.lobby);
 }
+
 
 function showLobby(lobby) {
   $("lobbyBox").style.display = "block";
