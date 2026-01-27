@@ -54,23 +54,33 @@ async function createLobby() {
 
 
 function showLobby(lobby) {
+  currentLobbyCode = lobby.code;
+
+  // Show lobby panel
   $("lobbyBox").style.display = "block";
+
+  // Show code
   $("codePill").textContent = lobby.code;
 
-  $("joinLink").textContent  = location.origin + "/join";
-  $("playLink").textContent  = location.origin + "/play/" + lobby.code;
-  $("watchLink").textContent = location.origin + "/watch/" + lobby.code;
+  // Build links
+  const base = window.location.origin;
+  $("joinLink").textContent  = base + "/join";
+  $("playLink").textContent  = base + "/play/" + lobby.code;
+  $("watchLink").textContent = base + "/watch/" + lobby.code;
 
-  $("startBtn").onclick = async () => {
-    await fetch(`/api/host/start_round/${lobby.code}`, {
-      method: "POST"
-    });
-  };
+  // Start button
+  const startBtn = $("startBtn");
+  if (startBtn) {
+    startBtn.onclick = async () => {
+      await fetch(`/api/host/start_round/${lobby.code}`, {
+        method: "POST",
+        headers: {
+          "X-Host-Key": HOST_KEY
+        }
+      });
+    };
+  }
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-  $("createLobbyBtn").addEventListener("click", createLobby);
-});
 
 
 
