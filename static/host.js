@@ -1,3 +1,5 @@
+console.log("host.js file executed");
+
 function $(id) {
   return document.getElementById(id);
 }
