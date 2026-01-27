@@ -27,7 +27,8 @@ async function createLobby() {
   };
 
   try {
-    const res = await fetch("/api/create", {
+    const res = await fetch("/api/host/create_lobby", {
+
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
