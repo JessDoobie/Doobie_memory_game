@@ -75,7 +75,7 @@ function showLobby(lobby) {
   const startBtn = $("startBtn");
   if (startBtn) {
     startBtn.onclick = async () => {
-      await fetch(`/api/host/start_round/${lobby.code}`, {
+      await fetch(`/api/host/start_round/${currentLobbyCode}`, {
         method: "POST",
         headers: {
           "X-Host-Key": HOST_KEY
