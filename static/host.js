@@ -45,9 +45,10 @@ async function createLobby() {
       return;
     }
 
-    currentLobbyCode = out.code;
-    $("createStatus").textContent = "Lobby created ✅";
-    showLobby({ code: out.code });
+currentLobbyCode = out.lobby.code;
+$("createStatus").textContent = "Lobby created ✅";
+showLobby(out.lobby);
+
 
   } catch (err) {
     $("createStatus").textContent = "Network error creating lobby";
