@@ -97,23 +97,7 @@ def api_start():
 
 LOBBIES = {}
 
-PRESETS = {
-    "quick":    {"rows":4, "cols":4},
-    "standard": {"rows":5, "cols":4},
-    "extended": {"rows":6, "cols":4},
-}
 
-EMOJIS = list("🍓🍒🍇🍉🍍🥝🍑🍋🍪🍩🍫🧁🍬🍡🍦🥥🍌🍏🍎🍊")
-
-def make_code():
-    return "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
-
-def build_deck(n):
-    pairs = n // 2
-    picks = random.sample(EMOJIS, pairs)
-    deck = picks + picks
-    random.shuffle(deck)
-    return deck
 
 @app.route("/")
 def home(): return render_template("home.html")
@@ -127,22 +111,7 @@ def join(): return render_template("join.html")
 @app.route("/play/<code>")
 def play(code): return render_template("play.html", code=code)
 
-@app.post("/api/create_lobby")
-def create():
-    data = request.json or {}
-    preset = data.get("preset","standard")
-    p = PRESETS[preset]
 
-    total = p["rows"] * p["cols"]
-    code = make_code()
-
-    LOBBIES[code] = {
-        "rows": p["rows"],
-        "cols": p["cols"],
-        "deck": build_deck(total),
-        "players": {},
-        "status": "waiting",
-    }
 
     return jsonify(ok=True, code=code)
 
