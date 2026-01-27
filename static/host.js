@@ -84,5 +84,16 @@ function showLobby(lobby) {
   }
 }
 
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = $("createLobbyBtn");
+  console.log("Create Lobby button found:", btn);
+
+  if (!btn) {
+    console.error("❌ createLobbyBtn not found in DOM");
+    return;
+  }
+
+  btn.addEventListener("click", createLobby);
+});
 
 
