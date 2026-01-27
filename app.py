@@ -224,6 +224,31 @@ def state(code, pid):
         }
     )
 
+@app.get("/api/watch_players/<code>")
+def watch_players(code):
+    code = (code or "").strip().upper()
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify(ok=False, error="Lobby not found"), 404
+
+    players_out = []
+
+    for pid, p in lobby.get("players", {}).items():
+        players_out.append({
+            "name": p.get("name", "Player"),
+            "revealed": p.get("revealed", []),
+            "matched": list(p.get("matched", set())),
+        })
+
+    return jsonify(
+        ok=True,
+        lobby={
+            "rows": lobby.get("rows"),
+            "cols": lobby.get("cols"),
+            "status": lobby.get("status"),
+        },
+        players=players_out
+    )
 
 
 @app.post("/api/flip")
