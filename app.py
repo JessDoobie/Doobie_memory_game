@@ -180,6 +180,34 @@ def get_state(code, pid):
         }
     )
 
+@app.get("/api/spectate/<code>")
+def spectate(code):
+    code = (code or "").strip().upper()
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify(ok=False, error="Lobby not found"), 404
+
+    players = []
+    for p in lobby["players"].values():
+        players.append({
+            "name": p["name"],
+            "revealed": p["revealed"],
+            "matched": list(p["matched"]),
+            "score": p["score"],
+            "matches": p["matches"],
+            "misses": p["misses"],
+        })
+
+    return jsonify(
+        ok=True,
+        lobby={
+            "rows": lobby["rows"],
+            "cols": lobby["cols"],
+            "status": lobby["status"],
+        },
+        players=players
+    )
+
 @app.post("/api/flip")
 def flip():
     data = request.get_json(silent=True) or {}
