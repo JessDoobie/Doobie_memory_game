@@ -49,6 +49,10 @@ def join():
 def play(code):
     return render_template("play.html", code=code)
 
+@app.route("/watch/<code>")
+def watch(code):
+    return render_template("watch.html", code=code)
+
 # -----------------------------
 # Host API
 # -----------------------------
