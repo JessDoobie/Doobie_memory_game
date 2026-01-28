@@ -5,22 +5,61 @@ if (!code) {
   console.error("No watch code found");
 }
 
+/* -------------------------
+   Mini board renderer
+------------------------- */
+function renderMiniBoard(player, cols) {
+  const grid = document.createElement("div");
+  grid.style.display = "grid";
+  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  grid.style.gap = "4px";
+  grid.style.marginTop = "6px";
+
+  player.faces.forEach(face => {
+    const cell = document.createElement("div");
+    cell.style.width = "32px";
+    cell.style.height = "32px";
+    cell.style.display = "flex";
+    cell.style.alignItems = "center";
+    cell.style.justifyContent = "center";
+    cell.style.borderRadius = "6px";
+    cell.style.background = face ? "#1f2937" : "#0f172a";
+    cell.style.fontSize = "18px";
+    cell.textContent = face || "";
+    grid.appendChild(cell);
+  });
+
+  return grid;
+}
+
+/* -------------------------
+   Fetch + render watcher view
+------------------------- */
 async function fetchWatchState() {
   try {
     const res = await fetch(`/api/watch/${code}`);
     const data = await res.json();
-    console.log("WATCH STATE:", data);
 
     if (!data.ok) return;
 
     const lb = document.getElementById("lb");
+    if (!lb) return;
+
     lb.innerHTML = "";
 
     data.players.forEach(p => {
-      const row = document.createElement("div");
-      row.className = "pill";
-      row.textContent = `${p.name} — ${p.score} pts`;
-      lb.appendChild(row);
+      const card = document.createElement("div");
+      card.className = "card";
+      card.style.marginBottom = "12px";
+
+      const title = document.createElement("div");
+      title.className = "pill";
+      title.textContent = `${p.name} — ${p.score} pts`;
+
+      card.appendChild(title);
+      card.appendChild(renderMiniBoard(p, data.lobby.cols));
+
+      lb.appendChild(card);
     });
 
   } catch (err) {
@@ -28,9 +67,8 @@ async function fetchWatchState() {
   }
 }
 
-
-// Fetch immediately
+/* -------------------------
+   Start polling
+------------------------- */
 fetchWatchState();
-
-// Then refresh every second
 setInterval(fetchWatchState, 1000);
