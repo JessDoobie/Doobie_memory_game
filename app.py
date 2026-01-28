@@ -180,6 +180,37 @@ def get_state(code, pid):
         }
     )
 
+@app.get("/api/watch/<code>")
+def watch_state(code):
+    code = (code or "").strip().upper()
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify(ok=False, error="Lobby not found"), 404
+
+    players = []
+    for pid, p in lobby["players"].items():
+        players.append({
+            "id": pid,
+            "name": p["name"],
+            "faces": p["revealed"],
+            "matched": list(p["matched"]),
+            "score": p["score"],
+            "matches": p["matches"],
+            "misses": p["misses"],
+        })
+
+    return jsonify(
+        ok=True,
+        lobby={
+            "code": lobby["code"],
+            "rows": lobby["rows"],
+            "cols": lobby["cols"],
+            "status": lobby["status"],
+            "mode": lobby["mode"],
+        },
+        players=players
+    )
+
 @app.get("/api/spectate/<code>")
 def spectate(code):
     code = (code or "").strip().upper()
