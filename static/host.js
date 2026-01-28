@@ -46,8 +46,10 @@ async function createLobby() {
     }
 
 currentLobbyCode = out.lobby.code;
+console.log("✅ createLobby set currentLobbyCode:", currentLobbyCode);
 $("createStatus").textContent = "Lobby created ✅";
 showLobby(out.lobby);
+
 
 
   } catch (err) {
