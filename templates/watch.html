@@ -37,8 +37,27 @@
     @media (max-width:520px){
       .tbl{ font-size: 14px; }
     }
+
+    /* =========================
+       PLAYER GRID LAYOUT (NEW)
+       ========================= */
+
+    /* Container holding ALL player mini boards */
+    #lb {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    /* Each player card */
+    #lb .card {
+      padding: 12px;
+    }
+
   </style>
 </head>
+
 <body>
   <div class="overlayWrap">
     <h1 class="bigTitle">📺 Live Leaderboard</h1>
@@ -55,6 +74,8 @@
       <div class="hr"></div>
 
       <div id="teamsBox" style="display:none"></div>
+
+      <!-- THIS IS THE GRID CONTAINER -->
       <div id="lb"></div>
 
       <p class="tiny muted" id="hint" style="margin-top:10px;"></p>
@@ -70,6 +91,7 @@
       document.body.classList.add("overlayMode");
     }
   </script>
+
   <script src="/static/watch.js"></script>
 </body>
 </html>
