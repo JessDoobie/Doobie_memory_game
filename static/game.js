@@ -214,6 +214,22 @@ async function getState(){
   try {
     const res = await fetch(`/api/state/${code}/${playerId}`);
     const out = await res.json();
+    // --- PLAYER HEADER UI ---
+const youEl = document.getElementById("you");
+if (youEl && out.state?.player?.name) {
+  youEl.textContent = `You: ${out.state.player.name}`;
+}
+
+const statusEl = document.getElementById("status");
+if (statusEl && out.state?.lobby?.status) {
+  statusEl.textContent = `Status: ${out.state.lobby.status}`;
+}
+
+const modeEl = document.getElementById("mode");
+if (modeEl && out.state?.lobby?.mode) {
+  modeEl.textContent = out.state.lobby.mode.toUpperCase();
+}
+
 
     if(!out.ok){
       localStorage.removeItem(playerKey);
