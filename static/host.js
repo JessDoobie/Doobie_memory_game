@@ -22,11 +22,11 @@ async function createLobby() {
   $("createStatus").textContent = "Creating lobby…";
 
   const body = {
-    mode: $("mode").value,
-    entry: $("entry").value,
-    board: preset,
-    host_key: HOST_KEY   // ✅ THIS IS THE KEY FIX
-  };
+  mode: $("mode").value,
+  entry_mode: $("entry").value,
+  rows: rows,
+  cols: cols
+};
 
   try {
    const res = await fetch("/api/host/create_lobby", {
