@@ -79,9 +79,6 @@ input, select, textarea{
 /* ==============================
    BUTTONS (HOST + PLAYER)
 ============================== */
-/* ==============================
-   BUTTONS (HOST + PLAYER)
-============================== */
 button,
 .btn{
   padding:10px 14px;
@@ -123,6 +120,24 @@ button:disabled,
 /* optional success highlight */
 .btn.success{
   box-shadow: 0 0 0 2px rgba(125,79,255,.55);
+}
+/* ==============================
+   BUTTON FEEDBACK STATES
+============================== */
+
+.btn.clicked {
+  box-shadow: 0 0 0 2px rgba(125,79,255,0.6),
+              0 0 16px rgba(125,79,255,0.9);
+  transform: scale(0.97);
+}
+
+.btn.success {
+  background: #22c55e; /* green confirmation */
+  box-shadow: 0 0 16px rgba(34,197,94,0.8);
+}
+
+.btn.danger {
+  background: #ef4444; /* red for End Game */
 }
 
 
