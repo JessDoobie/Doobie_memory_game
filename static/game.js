@@ -61,19 +61,21 @@ function computeColumns(totalCards){
 
   // Phones
   if (w <= 480) {
-    if (totalCards <= 16) return 4;   // 4x4
     if (totalCards <= 20) return 4;   // 4x5
     if (totalCards <= 24) return 4;   // 4x6
     if (totalCards <= 30) return 5;   // 5x6
+    if (totalCards <= 32) return 4;   // 4x8 (perfect fit)
   }
 
   // Tablets / desktop
   if (totalCards <= 20) return 5;
   if (totalCards <= 24) return 6;
   if (totalCards <= 30) return 6;
+  if (totalCards <= 32) return 8;
 
   return 6;
 }
+
 
 
 // -------------------------------
