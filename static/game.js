@@ -97,12 +97,12 @@ let h = 76;
 const total = gridState.faces.length;
 
 if (window.innerWidth <= 480) {
-  if (total >= 30) h = 52;
+  if (total >= 32) h = 50;
+  else if (total >= 30) h = 52;
   else if (total >= 24) h = 56;
   else h = 62;
-} else if (window.innerHeight < 720) {
-  h = 66;
 }
+
 
 
   grid.innerHTML = "";
