@@ -74,45 +74,48 @@ function showLobby(lobby) {
   $("playLink").textContent  = base + "/play/" + lobby.code;
   $("watchLink").textContent = base + "/watch/" + lobby.code;
 
-  // Start button
+  // Button glow helper
   function flashSuccess(btn) {
-  btn.classList.add("clicked");
-  setTimeout(() => btn.classList.remove("clicked"), 300);
-}
+    btn.classList.add("clicked");
+    setTimeout(() => btn.classList.remove("clicked"), 300);
+  }
 
-const startBtn = $("startBtn");
-if (startBtn) {
-  startBtn.onclick = async () => {
-    flashSuccess(startBtn);
-    await fetch(`/api/host/start_round/${currentLobbyCode}`, {
-      method: "POST",
-      headers: { "X-Host-Key": HOST_KEY }
-    });
-  };
-}
+  // Start button
+  const startBtn = $("startBtn");
+  if (startBtn) {
+    startBtn.onclick = async () => {
+      flashSuccess(startBtn);
+      await fetch(`/api/host/start_round/${currentLobbyCode}`, {
+        method: "POST",
+        headers: { "X-Host-Key": HOST_KEY }
+      });
+    };
+  }
 
-const nextBtn = $("nextRoundBtn");
-if (nextBtn) {
-  nextBtn.onclick = async () => {
-    flashSuccess(nextBtn);
-    await fetch(`/api/host/start_round/${currentLobbyCode}`, {
-      method: "POST",
-      headers: { "X-Host-Key": HOST_KEY }
-    });
-  };
-}
+  // Next round button
+  const nextBtn = $("nextRoundBtn");
+  if (nextBtn) {
+    nextBtn.onclick = async () => {
+      flashSuccess(nextBtn);
+      await fetch(`/api/host/start_round/${currentLobbyCode}`, {
+        method: "POST",
+        headers: { "X-Host-Key": HOST_KEY }
+      });
+    };
+  }
 
-const endBtn = $("endBtn");
-if (endBtn) {
-  endBtn.onclick = async () => {
-    flashSuccess(endBtn);
-    await fetch(`/api/host/end_round/${currentLobbyCode}`, {
-      method: "POST",
-      headers: { "X-Host-Key": HOST_KEY }
-    });
-  };
-}
-
+  // End game button
+  const endBtn = $("endBtn");
+  if (endBtn) {
+    endBtn.onclick = async () => {
+      flashSuccess(endBtn);
+      await fetch(`/api/host/end_round/${currentLobbyCode}`, {
+        method: "POST",
+        headers: { "X-Host-Key": HOST_KEY }
+      });
+    };
+  }
+} // ✅ IMPORTANT: closes showLobby()
 
 document.addEventListener("DOMContentLoaded", () => {
   const btn = $("createLobbyBtn");
@@ -125,5 +128,3 @@ document.addEventListener("DOMContentLoaded", () => {
 
   btn.addEventListener("click", createLobby);
 });
-
-
