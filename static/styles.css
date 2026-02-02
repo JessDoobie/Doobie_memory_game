@@ -79,6 +79,9 @@ input, select, textarea{
 /* ==============================
    BUTTONS (HOST + PLAYER)
 ============================== */
+/* ==============================
+   BUTTONS (HOST + PLAYER)
+============================== */
 button,
 .btn{
   padding:10px 14px;
@@ -88,6 +91,7 @@ button,
   color:#fff;
   font-weight:700;
   cursor:pointer;
+  transition: transform .08s ease, filter .08s ease, box-shadow .08s ease;
 }
 
 button:hover,
@@ -95,17 +99,32 @@ button:hover,
   filter: brightness(1.08);
 }
 
+/* 👇 visual press feedback */
+button:active,
+.btn:active{
+  transform: scale(0.96);
+}
+
+/* outline variant */
 .btn.outline{
   background: transparent;
   border:1px solid rgba(125,79,255,.8);
   color:#cfd6ff;
 }
 
+/* disabled state */
 button:disabled,
 .btn:disabled{
   opacity:.6;
   cursor:not-allowed;
+  filter: grayscale(30%);
 }
+
+/* optional success highlight */
+.btn.success{
+  box-shadow: 0 0 0 2px rgba(125,79,255,.55);
+}
+
 
 /* ==============================
    GRIDS
