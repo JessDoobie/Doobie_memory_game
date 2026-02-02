@@ -74,18 +74,44 @@ function showLobby(lobby) {
   $("watchLink").textContent = base + "/watch/" + lobby.code;
 
   // Start button
-  const startBtn = $("startBtn");
-  if (startBtn) {
-    startBtn.onclick = async () => {
-      await fetch(`/api/host/start_round/${currentLobbyCode}`, {
-        method: "POST",
-        headers: {
-          "X-Host-Key": HOST_KEY
-        }
-      });
-    };
-  }
+  function flashSuccess(btn) {
+  btn.classList.add("clicked");
+  setTimeout(() => btn.classList.remove("clicked"), 300);
 }
+
+const startBtn = $("startBtn");
+if (startBtn) {
+  startBtn.onclick = async () => {
+    flashSuccess(startBtn);
+    await fetch(`/api/host/start_round/${currentLobbyCode}`, {
+      method: "POST",
+      headers: { "X-Host-Key": HOST_KEY }
+    });
+  };
+}
+
+const nextBtn = $("nextRoundBtn");
+if (nextBtn) {
+  nextBtn.onclick = async () => {
+    flashSuccess(nextBtn);
+    await fetch(`/api/host/start_round/${currentLobbyCode}`, {
+      method: "POST",
+      headers: { "X-Host-Key": HOST_KEY }
+    });
+  };
+}
+
+const endBtn = $("endBtn");
+if (endBtn) {
+  endBtn.onclick = async () => {
+    flashSuccess(endBtn);
+    await fetch(`/api/host/end_round/${currentLobbyCode}`, {
+      method: "POST",
+      headers: { "X-Host-Key": HOST_KEY }
+    });
+  };
+}
+
 
 document.addEventListener("DOMContentLoaded", () => {
   const btn = $("createLobbyBtn");
