@@ -24,9 +24,10 @@ async function createLobby() {
   const body = {
   mode: $("mode").value,
   entry_mode: $("entry").value,
-  rows: rows,
-  cols: cols
+  rows,
+  cols
 };
+
 
   try {
    const res = await fetch("/api/host/create_lobby", {
