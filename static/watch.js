@@ -26,7 +26,7 @@ function renderMiniBoard(player, cols) {
     cell.style.alignItems = "center";
     cell.style.justifyContent = "center";
     cell.style.borderRadius = "6px";
-    cell.style.fontSize = "18px";
+    
 
     // ✅ purple for unflipped
     cell.style.background = face ? "#1f2937" : "#2e1065";
