@@ -10,7 +10,7 @@ if (!code) {
 ------------------------- */
 function renderMiniBoard(player, cols) {
   const grid = document.createElement("div");
-  grid.className = "miniBoard";
+  grid.className = "watch-grid";
 
   grid.style.display = "grid";
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
@@ -18,7 +18,7 @@ function renderMiniBoard(player, cols) {
 
   player.faces.forEach(face => {
     const cell = document.createElement("div");
-    cell.className = "miniCell";
+    cell.className = "watch-tile";
 
     cell.style.width = "32px";
     cell.style.height = "32px";
