@@ -207,6 +207,12 @@ button:disabled,
   transition: background .12s ease;
 }
 
+/* Smaller emojis for dense boards (24 / 30 cards) */
+.grid[data-size="24"] .tile,
+.grid[data-size="30"] .tile{
+  font-size: clamp(16px, 4.5vw, 28px);
+}
+
 /* CARD BACK */
 .tile.hidden{
   background:
