@@ -312,3 +312,28 @@ body{
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap:16px;
 }
+/* ==============================
+   WATCH PAGE – MINI BOARDS
+============================== */
+
+/* Mini-board grid (inside each player card) */
+.watch-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+  gap: 4px;
+  max-width: 100%;
+}
+
+/* Mini-board tiles */
+.watch-tile{
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: #0f172a;
+  color: #e8ebf3;
+
+  font-size: clamp(14px, 3vw, 22px);
+}
