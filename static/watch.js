@@ -11,24 +11,13 @@ if (!code) {
 function renderMiniBoard(player, cols) {
   const grid = document.createElement("div");
   grid.className = "watch-grid";
-
-  grid.style.display = "grid";
-  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  grid.style.gap = "6px";
+  grid.style.setProperty("--cols", cols);
 
   player.faces.forEach(face => {
     const cell = document.createElement("div");
     cell.className = "watch-tile";
 
-    cell.style.width = "32px";
-    cell.style.height = "32px";
-    cell.style.display = "flex";
-    cell.style.alignItems = "center";
-    cell.style.justifyContent = "center";
-    cell.style.borderRadius = "6px";
-    
-
-    // ✅ purple for unflipped
+    // purple for hidden, dark for revealed
     cell.style.background = face ? "#1f2937" : "#2e1065";
     cell.textContent = face || "";
 
@@ -37,6 +26,7 @@ function renderMiniBoard(player, cols) {
 
   return grid;
 }
+
 
 
 /* -------------------------
