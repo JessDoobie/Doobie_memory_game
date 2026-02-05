@@ -115,6 +115,22 @@ function showLobby(lobby) {
       });
     };
   }
+  const compactBtn = $("compactBtn");
+if (compactBtn) {
+  compactBtn.onclick = () => {
+    const link = `${location.origin}/watch/${currentLobbyCode}?compact=1`;
+    navigator.clipboard.writeText(link);
+
+    compactBtn.textContent = "Copied!";
+    compactBtn.classList.add("success");
+
+    setTimeout(() => {
+      compactBtn.textContent = "Copy Compact Watch";
+      compactBtn.classList.remove("success");
+    }, 1200);
+  };
+}
+
 } // ✅ IMPORTANT: closes showLobby()
 
 document.addEventListener("DOMContentLoaded", () => {
