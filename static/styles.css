@@ -341,3 +341,42 @@ body{
 
   font-size: 16px;
 }
+/* ==============================
+   WATCH PAGE – COMPACT MODE
+============================== */
+
+body.compactMode .overlayWrap{
+  max-width: 100%;
+  padding: 8px;
+}
+
+/* Remove big headers */
+body.compactMode .bigTitle,
+body.compactMode .sub,
+body.compactMode .pillRow,
+body.compactMode .modeNote,
+body.compactMode #hint{
+  display: none !important;
+}
+
+/* Player cards tighter + square-ish */
+body.compactMode .card{
+  padding: 10px;
+  margin-bottom: 0;
+}
+
+/* Player grid tighter */
+body.compactMode #lb{
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+/* Mini boards tighter */
+body.compactMode .watch-grid{
+  gap: 3px;
+}
+
+/* Mini tiles smaller + denser */
+body.compactMode .watch-tile{
+  font-size: clamp(12px, 2.5vw, 18px);
+}
