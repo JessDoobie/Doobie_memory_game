@@ -68,11 +68,28 @@ function showLobby(lobby) {
   // Show code
   $("codePill").textContent = lobby.code;
 
-  // Build links
-  const base = window.location.origin;
-  $("joinLink").textContent  = base + "/join";
-  $("playLink").textContent  = base + "/play/" + lobby.code;
-  $("watchLink").textContent = base + "/watch/" + lobby.code;
+// Build links
+const base = window.location.origin;
+$("joinLink").textContent  = base + "/join";
+$("playLink").textContent  = base + "/play/" + lobby.code;
+$("watchLink").textContent = base + "/watch/" + lobby.code;
+
+// Compact watch link button
+const copyWatchBtn = $("copyWatchBtn");
+if (copyWatchBtn) {
+  copyWatchBtn.onclick = () => {
+    const link = `${location.origin}/watch/${currentLobbyCode}?compact=1`;
+    navigator.clipboard.writeText(link);
+
+    copyWatchBtn.textContent = "Copied!";
+    copyWatchBtn.classList.add("success");
+
+    setTimeout(() => {
+      copyWatchBtn.textContent = "Copy Compact Watch Link";
+      copyWatchBtn.classList.remove("success");
+    }, 1200);
+  };
+}
 
   // Button glow helper
   function flashSuccess(btn) {
