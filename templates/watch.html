@@ -80,13 +80,18 @@
   </div>
 
   <script>
-    window.MM_WATCH_CODE = "{{ code }}";
-    window.MM_OVERLAY = new URLSearchParams(window.location.search).get("overlay") === "1";
-    if(window.MM_OVERLAY){
-      document.body.classList.add("overlayMode");
-    }
-  </script>
+  const params = new URLSearchParams(window.location.search);
 
-  <script src="/static/watch.js"></script>
-</body>
-</html>
+  window.MM_WATCH_CODE = "{{ code }}";
+  window.MM_OVERLAY = params.get("overlay") === "1";
+  window.MM_COMPACT = params.get("compact") === "1";
+
+  if (window.MM_OVERLAY) {
+    document.body.classList.add("overlayMode");
+  }
+
+  if (window.MM_COMPACT) {
+    document.body.classList.add("compactMode");
+  }
+</script>
+
