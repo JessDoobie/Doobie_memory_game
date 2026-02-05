@@ -319,21 +319,25 @@ body{
 /* Mini-board grid (inside each player card) */
 .watch-grid{
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
-  gap: 4px;
+  grid-template-columns: repeat(auto-fit, 28px);
+  gap: 6px;
+
   max-width: 100%;
+  justify-content: start;
 }
 
 /* Mini-board tiles */
 .watch-tile{
-  aspect-ratio: 1 / 1;
+  width: 28px;
+  height: 28px;
+
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
 
-  background: #0f172a;
+  background: #2e1065; /* purple back */
   color: #e8ebf3;
 
-  font-size: clamp(14px, 3vw, 22px);
+  font-size: 16px;
 }
