@@ -77,7 +77,7 @@ input, select, textarea{
 }
 
 /* ==============================
-   BUTTONS (HOST + PLAYER)
+   BUTTONS
 ============================== */
 button,
 .btn{
@@ -96,20 +96,17 @@ button:hover,
   filter: brightness(1.08);
 }
 
-/* 👇 visual press feedback */
 button:active,
 .btn:active{
   transform: scale(0.96);
 }
 
-/* outline variant */
 .btn.outline{
   background: transparent;
   border:1px solid rgba(125,79,255,.8);
   color:#cfd6ff;
 }
 
-/* disabled state */
 button:disabled,
 .btn:disabled{
   opacity:.6;
@@ -117,29 +114,20 @@ button:disabled,
   filter: grayscale(30%);
 }
 
-/* optional success highlight */
+.btn.clicked{
+  box-shadow: 0 0 0 2px rgba(125,79,255,.6),
+              0 0 16px rgba(125,79,255,.9);
+  transform: scale(.97);
+}
+
 .btn.success{
-  box-shadow: 0 0 0 2px rgba(125,79,255,.55);
-}
-/* ==============================
-   BUTTON FEEDBACK STATES
-============================== */
-
-.btn.clicked {
-  box-shadow: 0 0 0 2px rgba(125,79,255,0.6),
-              0 0 16px rgba(125,79,255,0.9);
-  transform: scale(0.97);
+  background:#22c55e;
+  box-shadow:0 0 16px rgba(34,197,94,.8);
 }
 
-.btn.success {
-  background: #22c55e; /* green confirmation */
-  box-shadow: 0 0 16px rgba(34,197,94,0.8);
+.btn.danger{
+  background:#ef4444;
 }
-
-.btn.danger {
-  background: #ef4444; /* red for End Game */
-}
-
 
 /* ==============================
    GRIDS
@@ -147,42 +135,11 @@ button:disabled,
 .grid2{
   display:grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap:10px;
 }
 
-@media (max-width: 520px){
-  .grid2{ grid-template-columns: 1fr; }
-}
-
-/* ==============================
-   LEADERBOARD TABLE
-============================== */
-.tbl{
-  width:100%;
-  border-collapse:collapse;
-  font-size:14px;
-}
-
-.tbl th, .tbl td{
-  padding:6px 8px;
-  border-bottom:1px solid rgba(39,50,74,.6);
-  text-align:left;
-}
-
-.tbl th{
-  color:#b9c2ff;
-  font-weight:700;
-}
-
-/* ==============================
-   TOP BAR
-============================== */
-.topbar{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:12px;
-  margin-bottom:12px;
+@media (max-width:520px){
+  .grid2{ grid-template-columns:1fr; }
 }
 
 /* ==============================
@@ -202,181 +159,89 @@ button:disabled,
   background: rgba(17,22,36,.9);
   color:#e8ebf3;
   font-size: clamp(20px, 5.5vw, 34px);
-  line-height:1;
   cursor:pointer;
-  transition: background .12s ease;
 }
 
-/* Smaller emojis for dense boards (24 / 30 cards) */
 .grid[data-size="24"] .tile,
 .grid[data-size="30"] .tile{
   font-size: clamp(16px, 4.5vw, 28px);
 }
 
-/* CARD BACK */
 .tile.hidden{
   background:
     radial-gradient(circle at top left, rgba(220,190,255,.35), transparent 45%),
     linear-gradient(135deg, #6a3cff, #2a165f);
-
-  border:2px solid #ffffff;
-
+  border:2px solid #fff;
   box-shadow:
     inset 0 0 0 2px rgba(140,100,220,.55),
     inset 0 0 18px rgba(255,255,255,.08),
     0 8px 22px rgba(0,0,0,.35);
-
-  display:flex;
-  align-items:center;
-  justify-content:center;
-
-  color:#f7f2ff;
 }
 
-/* REVEALED */
-.tile.revealed{
-  background: rgba(125,79,255,.15);
-}
-
-/* MATCHED */
+.tile.revealed{ background: rgba(125,79,255,.15); }
 .tile.matched{
   background: rgba(80,200,120,.18);
   border-color: rgba(80,200,120,.45);
-  cursor: default;
-}
-
-/* REMOVE HOVER LAG / HEARTBEAT */
-.tile:hover{
-  transform:none;
 }
 
 /* ==============================
-   MOBILE TILE SIZE
+   WATCH PAGE – PLAYER GRID
 ============================== */
-@media (max-width: 520px){
-  .tile{
-    font-size: clamp(24px, 6vw, 34px);
-  }
-}
-
-/* ==============================
-   WARMUP SCREEN
-============================== */
-#warmup{
-  position:fixed;
-  inset:0;
-  background: rgba(11,15,25,.95);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:50;
-}
-
-#warmup .box{ text-align:center; }
-
-.spinner{
-  width:38px;
-  height:38px;
-  border:4px solid rgba(125,79,255,.3);
-  border-top-color:#7d4fff;
-  border-radius:50%;
-  margin:12px auto;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin{
-  to{ transform: rotate(360deg); }
-}
-
-/* ==============================
-   MOBILE SCROLL FIXES
-============================== */
-body{
-  overflow-x:hidden;
-}
-
-.wrap{
-  -webkit-overflow-scrolling: touch;
-}
-
-#warmup.is-hidden{
-  display:none !important;
-}
-
-/* ==============================
-   WATCH PAGE – PLAYER GRID LAYOUT
-============================== */
-
 #lb{
   display:grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap:16px;
 }
+
 /* ==============================
    WATCH PAGE – MINI BOARDS
 ============================== */
-
-/* Mini-board grid (inside each player card) */
 .watch-grid{
-  display: grid;
+  display:grid;
   grid-template-columns: repeat(auto-fit, 28px);
-  gap: 6px;
-
-  max-width: 100%;
-  justify-content: start;
+  gap:6px;
 }
 
-/* Mini-board tiles */
 .watch-tile{
-  width: 28px;
-  height: 28px;
-
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  background: #2e1065; /* purple back */
-  color: #e8ebf3;
-
-  font-size: 16px;
+  width:28px;
+  height:28px;
+  border-radius:6px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#2e1065;
+  color:#e8ebf3;
+  font-size:16px;
 }
+
 /* ==============================
-   WATCH PAGE – COMPACT MODE
+   WATCH PAGE – COMPACT MODE ✅ FIXED
 ============================== */
-
-body.compact .overlayWrap{
-  max-width: 100%;
-  padding: 8px;
+body.compactMode .overlayWrap{
+  max-width:100%;
+  padding:8px;
 }
 
-/* Remove big headers */
-body.compact .bigTitle,
-body.compact .sub,
-body.compact .pillRow,
-body.compact .modeNote,
-body.compact #hint{
-  display: none !important;
+body.compactMode .bigTitle,
+body.compactMode .sub,
+body.compactMode .pillRow,
+body.compactMode .modeNote,
+body.compactMode #hint{
+  display:none !important;
 }
 
-/* Player cards tighter + square-ish */
-body.compact .card{
-  padding: 10px;
-  margin-bottom: 0;
+body.compactMode .card{
+  padding:10px;
+  margin-bottom:0;
 }
 
-/* Player grid tighter (2–3 per row) */
-body.compact #lb{
+body.compactMode #lb{
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
+  gap:10px;
 }
 
-/* Mini boards tighter */
-body.compact .watch-grid{
-  gap: 3px;
-}
+body.compactMode .watch-grid{ gap:3px; }
 
-/* Mini tiles smaller + denser */
-body.compact .watch-tile{
+body.compactMode .watch-tile{
   font-size: clamp(12px, 2.5vw, 18px);
 }
