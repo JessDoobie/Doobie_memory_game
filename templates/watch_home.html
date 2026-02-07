@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Watch a Game</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2>📺 Watch a Game</h2>
+
+      <p class="muted tiny">
+        Enter a lobby code to open the live spectator board.
+      </p>
+
+      <div class="row">
+        <input id="codeInput" placeholder="ABCDE" maxlength="5" />
+        <button id="goBtn" class="btn">Watch</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById("codeInput");
+    const btn = document.getElementById("goBtn");
+
+    btn.onclick = () => {
+      const code = (input.value || "").trim().toUpperCase();
+      if (!code) return;
+      window.location.href = "/watch/" + code;
+    };
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") btn.click();
+    });
+  </script>
+</body>
+</html>
