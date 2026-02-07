@@ -183,6 +183,9 @@ def get_state(code, pid):
             ]
         }
     )
+@app.get("/watch")
+def watch_home():
+    return render_template("watch_home.html")
 
 @app.get("/api/watch/<code>")
 def watch_state(code):
