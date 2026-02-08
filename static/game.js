@@ -236,6 +236,7 @@ async function getState(){
     const res = await fetch(`/api/state/${code}/${playerId}`);
     const out = await res.json();
     console.log("STATE FROM SERVER:", out);
+    console.log("FACES:", out.state?.grid?.faces);
 
     // --- PLAYER HEADER UI ---
 const youEl = document.getElementById("you");
