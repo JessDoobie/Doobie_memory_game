@@ -217,6 +217,8 @@ async function getState(){
   try {
     const res = await fetch(`/api/state/${code}/${playerId}`);
     const out = await res.json();
+    console.log("STATE FROM SERVER:", out);
+
     // --- PLAYER HEADER UI ---
 const youEl = document.getElementById("you");
 if (youEl && out.state?.player?.name) {
