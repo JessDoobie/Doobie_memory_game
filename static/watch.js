@@ -38,6 +38,14 @@ async function fetchWatchState() {
     const data = await res.json();
 
     if (!data.ok) return;
+    const banner = document.getElementById("celebrationBanner");
+if (banner) {
+  if (data.lobby.status === "ended") {
+    banner.classList.remove("hidden");
+  } else {
+    banner.classList.add("hidden");
+  }
+}
 
     const lb = document.getElementById("lb");
     if (!lb) return;
