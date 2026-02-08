@@ -82,7 +82,9 @@ function computeColumns(totalCards){
 // -------------------------------
 // Rendering
 // -------------------------------
+
 function renderGrid(state){
+  console.log("renderGrid received:", state);
   const lobby = state.lobby;
   const gridState = state.grid;
   const matched = new Set(gridState.matched || []);
