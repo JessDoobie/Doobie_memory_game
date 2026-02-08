@@ -44,10 +44,16 @@ async function fetchWatchState() {
 
     lb.innerHTML = "";
 
-    data.players.forEach(p => {
+    const sorted = [...data.players].sort((a, b) => b.score - a.score);
+
+    sorted.forEach((p, i) => {
       const card = document.createElement("div");
       card.className = "card";
       card.style.marginBottom = "12px";
+      
+      if (i === 0) card.classList.add("winner-1");
+      if (i === 1) card.classList.add("winner-2");
+      if (i === 2) card.classList.add("winner-3");
 
       const title = document.createElement("div");
       title.className = "pill";
