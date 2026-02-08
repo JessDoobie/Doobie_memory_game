@@ -87,7 +87,25 @@ function renderGrid(state){
   const gridState = state.grid;
   const matched = new Set(gridState.matched || []);
 
-  const grid = $("grid");
+  let grid = document.getElementById("grid");
+
+if (!grid) {
+  console.warn("Grid missing — rebuilding");
+
+  const container = document.querySelector(".wrap");
+  if (!container) return;
+
+  const card = document.createElement("div");
+  card.className = "card";
+
+  grid = document.createElement("div");
+  grid.id = "grid";
+  grid.className = "grid";
+
+  card.appendChild(grid);
+  container.appendChild(card);
+}
+
   const cols = computeColumns(gridState.cols || lobby.cols || 4);
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
   // STEP 2D — tighten grid gap on phones
