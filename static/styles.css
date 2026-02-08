@@ -263,3 +263,32 @@ body.compactMode .watch-tile{
   box-shadow: 0 0 18px rgba(205,127,50,0.9);
   border: 2px solid #cd7f32;
 }
+
+/* ==============================
+   CELEBRATION BANNER
+============================== */
+
+.celebration{
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, #7d4fff, #22c55e);
+  color: white;
+  padding: 14px 22px;
+  border-radius: 16px;
+  font-weight: 800;
+  font-size: 22px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.4);
+  z-index: 999;
+  animation: popIn .4s ease;
+}
+
+.hidden{
+  display:none;
+}
+
+@keyframes popIn{
+  from { transform: translateX(-50%) scale(.7); opacity:0; }
+  to   { transform: translateX(-50%) scale(1); opacity:1; }
+}
