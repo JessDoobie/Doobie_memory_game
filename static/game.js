@@ -129,6 +129,8 @@ if (window.innerWidth <= 480) {
   grid.innerHTML = "";
 
   gridState.faces.forEach((face, idx) => {
+    console.log("making tile", idx, face);
+
     const tile = document.createElement("button");
     tile.className = "tile";
     tile.style.height = h + "px";
