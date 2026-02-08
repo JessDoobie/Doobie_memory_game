@@ -55,7 +55,7 @@ def watch(code):
 
 @app.route("/watch")
 def watch_landing():
-    return render_template("watch_landing.html")
+    return render_template("watch_home.html")
 
 # -----------------------------
 # Host API
