@@ -245,3 +245,21 @@ body.compactMode .watch-grid{ gap:3px; }
 body.compactMode .watch-tile{
   font-size: clamp(12px, 2.5vw, 18px);
 }
+/* ==============================
+   WATCH – WINNER HIGHLIGHTS
+============================== */
+
+.winner-1{
+  box-shadow: 0 0 18px rgba(255,215,0,0.9);
+  border: 2px solid gold;
+}
+
+.winner-2{
+  box-shadow: 0 0 18px rgba(200,200,200,0.9);
+  border: 2px solid silver;
+}
+
+.winner-3{
+  box-shadow: 0 0 18px rgba(205,127,50,0.9);
+  border: 2px solid #cd7f32;
+}
