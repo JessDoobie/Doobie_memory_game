@@ -292,9 +292,10 @@ body.compactMode .watch-tile{
   animation: popIn .4s ease;
 }
 
-.hidden{
+.ui-hidden{
   display:none;
 }
+
 
 @keyframes popIn{
   from { transform: translateX(-50%) scale(.7); opacity:0; }
