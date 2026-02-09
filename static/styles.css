@@ -156,6 +156,13 @@ button:disabled,
   grid-auto-rows: 60px;
 }
 
+/* Bigger, roomier tiles on desktop */
+@media (min-width: 900px){
+  .grid{
+    gap: 14px;
+    grid-auto-rows: 90px;
+  }
+}
 
 /* ==============================
    CARD TILES
