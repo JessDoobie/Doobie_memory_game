@@ -161,6 +161,7 @@ button:disabled,
   color:#e8ebf3;
   font-size: clamp(20px, 5.5vw, 34px);
   cursor:pointer;
+  width: 100%;
 }
 
 .grid[data-size="24"] .tile,
