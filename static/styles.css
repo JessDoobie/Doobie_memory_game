@@ -31,7 +31,10 @@ button{ font-family:inherit; }
   border-radius: 16px;
   padding: 14px;
   margin-bottom: 14px;
+
+  min-width: 0;   /* ⭐ important */
 }
+
 
 .hr{
   height: 1px;
