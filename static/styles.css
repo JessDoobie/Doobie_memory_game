@@ -152,7 +152,10 @@ button:disabled,
   display: grid;
   gap: 10px;
   min-height: 200px;
+  width: 100%;
+  grid-auto-rows: 60px;
 }
+
 
 /* ==============================
    CARD TILES
