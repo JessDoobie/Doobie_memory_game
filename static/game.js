@@ -84,6 +84,8 @@ function computeColumns(totalCards){
 // -------------------------------
 
 function renderGrid(state){
+  console.log("🧱 renderGrid start");
+
   console.log("renderGrid received:", state);
   const lobby = state.lobby;
   const gridState = state.grid;
