@@ -106,6 +106,44 @@ def start_round(code):
 
     lobby["status"] = "running"
     return jsonify(ok=True)
+    @app.post("/api/host/next_round/<code>")
+def next_round(code):
+    hk = request.headers.get("X-Host-Key", "")
+    if HOST_KEY and hk != HOST_KEY:
+        return jsonify(ok=False, error="Bad host key"), 403
+
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify(ok=False, error="Lobby not found"), 404
+
+    # Reset player boards
+    total = lobby["rows"] * lobby["cols"]
+    lobby["faces"] = _make_faces(total)
+
+    for p in lobby["players"].values():
+        p["revealed"] = [None] * total
+        p["matched"] = set()
+        p["picks"] = []
+        p["hide_at"] = None
+
+    lobby["status"] = "running"
+
+    return jsonify(ok=True)
+
+
+@app.post("/api/host/end_round/<code>")
+def end_round(code):
+    hk = request.headers.get("X-Host-Key", "")
+    if HOST_KEY and hk != HOST_KEY:
+        return jsonify(ok=False, error="Bad host key"), 403
+
+    lobby = LOBBIES.get(code)
+    if not lobby:
+        return jsonify(ok=False, error="Lobby not found"), 404
+
+    lobby["status"] = "ended"
+    return jsonify(ok=True)
+
 
 # -----------------------------
 # Player API
