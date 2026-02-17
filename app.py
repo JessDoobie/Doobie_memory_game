@@ -107,6 +107,8 @@ def start_round(code):
     lobby["status"] = "running"
     return jsonify(ok=True)
     @app.post("/api/host/next_round/<code>")
+
+@app.post("/api/host/next_round/<code>")
 def next_round(code):
     hk = request.headers.get("X-Host-Key", "")
     if HOST_KEY and hk != HOST_KEY:
@@ -143,6 +145,7 @@ def end_round(code):
 
     lobby["status"] = "ended"
     return jsonify(ok=True)
+
 
 
 # -----------------------------
