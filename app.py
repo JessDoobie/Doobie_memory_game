@@ -60,6 +60,7 @@ def watch_landing():
 # -----------------------------
 # Host API
 # -----------------------------
+
 @app.post("/api/host/create_lobby")
 def create_lobby():
     data = request.get_json(silent=True) or {}
@@ -94,6 +95,7 @@ def create_lobby():
 
     return jsonify(ok=True, lobby=LOBBIES[code])
 
+
 @app.post("/api/host/start_round/<code>")
 def start_round(code):
     hk = request.headers.get("X-Host-Key", "")
@@ -106,7 +108,7 @@ def start_round(code):
 
     lobby["status"] = "running"
     return jsonify(ok=True)
-    @app.post("/api/host/next_round/<code>")
+
 
 @app.post("/api/host/next_round/<code>")
 def next_round(code):
@@ -118,7 +120,7 @@ def next_round(code):
     if not lobby:
         return jsonify(ok=False, error="Lobby not found"), 404
 
-    # Reset player boards
+    # Reset board
     total = lobby["rows"] * lobby["cols"]
     lobby["faces"] = _make_faces(total)
 
@@ -145,6 +147,7 @@ def end_round(code):
 
     lobby["status"] = "ended"
     return jsonify(ok=True)
+
 
 
 
