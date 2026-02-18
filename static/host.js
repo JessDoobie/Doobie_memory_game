@@ -109,17 +109,19 @@ if (copyWatchBtn) {
     };
   }
 
-  // Next round button
   const nextBtn = $("nextRoundBtn");
-  if (nextBtn) {
-    nextBtn.onclick = async () => {
-      flashSuccess(nextBtn);
-      await fetch(`/api/host/next_round/${currentLobbyCode}`, {
-        method: "POST",
-        headers: { "X-Host-Key": HOST_KEY }
-      });
-    };
-  }
+if (nextBtn) {
+  nextBtn.onclick = async () => {
+    console.log("NEXT ROUND CLICKED");
+    flashSuccess(nextBtn);
+
+    await fetch(`/api/host/next_round/${currentLobbyCode}`, {
+      method: "POST",
+      headers: { "X-Host-Key": HOST_KEY }
+    });
+  };
+}
+
 
   // End game button
   const endBtn = $("endBtn");
