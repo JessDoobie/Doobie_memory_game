@@ -160,20 +160,22 @@ if (window.innerWidth <= 480) {
   lockInput = true;
   flipInFlight = true;
 
+  // 👇 Immediately show flip (instant UI feedback)
+  tile.classList.remove("hidden");
+  tile.classList.add("revealed");
+  tile.textContent = "💖"; // temporary flip visual
+
   try {
     await flip(idx);
   } catch (e) {
     console.error("flip failed:", e);
   } finally {
-    // Unlock immediately so PC taps feel responsive
     flipInFlight = false;
     lockInput = false;
   }
 
-  // Refresh state in the background (don't block clicks)
   getState();
 };
-
 
 
     grid.appendChild(tile);
