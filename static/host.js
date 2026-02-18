@@ -114,7 +114,7 @@ if (copyWatchBtn) {
   if (nextBtn) {
     nextBtn.onclick = async () => {
       flashSuccess(nextBtn);
-      await fetch(`/api/host/start_round/${currentLobbyCode}`, {
+      await fetch(`/api/host/next_round/${currentLobbyCode}`, {
         method: "POST",
         headers: { "X-Host-Key": HOST_KEY }
       });
