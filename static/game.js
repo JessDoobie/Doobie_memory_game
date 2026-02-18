@@ -163,7 +163,6 @@ if (window.innerWidth <= 480) {
   // 👇 Immediately show flip (instant UI feedback)
   tile.classList.remove("hidden");
   tile.classList.add("revealed");
-  tile.textContent = "💖"; // temporary flip visual
 
   try {
     await flip(idx);
