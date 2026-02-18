@@ -124,20 +124,21 @@ def next_round(code):
     total = lobby["rows"] * lobby["cols"]
     lobby["faces"] = _make_faces(total)
 
-for p in lobby["players"].values():
-    p["revealed"] = [None] * total
-    p["matched"] = set()
-    p["picks"] = []
-    p["hide_at"] = None
+    for p in lobby["players"].values():
+        p["revealed"] = [None] * total
+        p["matched"] = set()
+        p["picks"] = []
+        p["hide_at"] = None
 
-    # reset round stats
-    p["score"] = 0
-    p["matches"] = 0
-    p["misses"] = 0
+        # reset round stats
+        p["score"] = 0
+        p["matches"] = 0
+        p["misses"] = 0
 
-lobby["status"] = "running"
+    lobby["status"] = "running"
 
-return jsonify(ok=True)
+    return jsonify(ok=True)
+
 
 
 
